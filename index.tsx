@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
@@ -15,7 +15,6 @@ import {
   Heading,
   Image as ImageIcon,
   Download,
-  Settings,
   Palette,
   Type as TypeIcon,
   FileText,
@@ -30,8 +29,7 @@ import {
   Pencil,
   HelpCircle,
   ChevronDown,
-  CheckSquare,
-  Square
+  CheckSquare
 } from "lucide-react";
 
 // --- Types & Interfaces ---
@@ -227,21 +225,6 @@ const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload
     </div>
   )
 }
-
-const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon }: any) => {
-  const base = "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all text-sm font-sans";
-  const variants: any = {
-    primary: "bg-[var(--primary)] text-white hover:opacity-90 shadow-md",
-    secondary: "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 shadow-sm",
-  };
-
-  return (
-    <button onClick={onClick} className={`${base} ${variants[variant]} ${className}`}>
-      {Icon && <Icon size={16} />}
-      {children}
-    </button>
-  );
-};
 
 // --- Player Components ---
 
