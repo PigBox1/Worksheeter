@@ -100,7 +100,6 @@ export const QuestionBoard = () => {
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showSettings, setShowSettings] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'|'inside'} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -130,7 +129,7 @@ export const QuestionBoard = () => {
     setDraggedType(null);
   }, []);
 
-  const updateBlock = useCallback((id: string, parentId: string | undefined, newData: Block) => {
+  const updateBlock = useCallback((id: string, _parentId: string | undefined, newData: Block) => {
     setData(prev => {
       const updateRecursive = (blocks: Block[]): Block[] => {
         return blocks.map(b => {
@@ -145,14 +144,14 @@ export const QuestionBoard = () => {
     });
   }, []);
 
-  const removeBlock = useCallback((id: string, parentId: string | undefined) => {
+  const removeBlock = useCallback((id: string, _parentId: string | undefined) => {
     setData(prev => ({
       ...prev,
       blocks: removeBlockRecursive(prev.blocks, id)
     }));
   }, []);
 
-  const duplicateBlock = useCallback((block: Block, parentId?: string) => {
+  const duplicateBlock = useCallback((block: Block, _parentId?: string) => {
     setData(prev => {
       const newBlock = duplicateBlockHelper(block);
       const insertAfterRecursive = (blocks: Block[]): Block[] => {
@@ -280,6 +279,7 @@ export const QuestionBoard = () => {
     }, 500);
   };
 
+  const presetColors = ['#64748b', '#ef4444', '#f97316', '#f59e0b', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#d946ef', '#ec4899'];
   
   const getNumbering = (depth: number, index: number) => {
      if (depth === 0) return `${index + 1}.`;
@@ -288,7 +288,8 @@ export const QuestionBoard = () => {
      return '';
   }
 
-  // Preview Counter Helper
+  // Counters for numbering
+  let questionCounter = 0;
   let previewQuestionCounter = 0;
 
   return (
@@ -364,7 +365,7 @@ export const QuestionBoard = () => {
                     if (segment.length === 0 && segIdx !== 0) return null;
 
                     return (
-                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative">
+                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative transition-all duration-300">
                           {segIdx === 0 && (
                             <div className={`space-y-4 pt-4 ${segment.length > 0 ? 'mb-12 border-b border-slate-100 pb-10' : ''}`}>
                               <input 
@@ -402,7 +403,8 @@ export const QuestionBoard = () => {
                              }}
                           >
                              {segment.length === 0 && segIdx !== 0 && ( <div className="text-center text-slate-400"><p>Empty Page</p></div> )}
-                             {segment.map((block, index) => {
+                             {/* Render Top Level Blocks */}
+                             {segment.map((block, _index) => {
                                 const isQuestion = block.type === 'question';
                                 const isGroup = block.type === 'group';
                                 const globalIndex = data.blocks.indexOf(block);
@@ -560,7 +562,7 @@ export const QuestionBoard = () => {
                     {showSettings && (
                        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:absolute md:bottom-full md:left-auto md:right-0 md:translate-x-0 mb-4 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-5 animate-in fade-in zoom-in-95 origin-bottom-right z-[60]">
                           <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800">Design</h3><button onClick={() => setShowSettings(false)}><X size={16} className="text-slate-400 hover:text-slate-600"/></button></div>
-                          <div className="space-y-6"><div><label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><Palette size={12}/> Accent Color</label><div className="flex flex-wrap gap-2">{['#64748b', '#ef4444', '#f97316', '#f59e0b', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#d946ef', '#ec4899'].map(c => (<button key={c} onClick={() => setData(prev => ({...prev, design: {...prev.design!, accentColor: c}}))} className={`w-8 h-8 rounded-full border-2 ${data.design?.accentColor === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-110'} transition-transform shadow-sm`} style={{backgroundColor: c}} />))}</div></div><div><label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><TypeIcon size={12}/> Typography</label><div className="flex bg-slate-100 p-1 rounded-lg">{['sans', 'serif', 'mono'].map(f => (<button key={f} onClick={() => setData(prev => ({...prev, design: {...prev.design!, font: f as any}}))} className={`flex-1 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${data.design?.font === f ? `bg-white text-slate-900 shadow-sm` : 'text-slate-500 hover:text-slate-700'}`}>{f}</button>))}</div></div></div>
+                          <div className="space-y-6"><div><label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><Palette size={12}/> Accent Color</label><div className="flex flex-wrap gap-2">{presetColors.map(c => (<button key={c} onClick={() => setData(prev => ({...prev, design: {...prev.design!, accentColor: c}}))} className={`w-8 h-8 rounded-full border-2 ${data.design?.accentColor === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-110'} transition-transform shadow-sm`} style={{backgroundColor: c}} />))}</div></div><div><label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><TypeIcon size={12}/> Typography</label><div className="flex bg-slate-100 p-1 rounded-lg">{['sans', 'serif', 'mono'].map(f => (<button key={f} onClick={() => setData(prev => ({...prev, design: {...prev.design!, font: f as any}}))} className={`flex-1 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${data.design?.font === f ? `bg-white text-slate-900 shadow-sm` : 'text-slate-500 hover:text-slate-700'}`}>{f}</button>))}</div></div></div>
                        </div>
                     )}
                  </div>

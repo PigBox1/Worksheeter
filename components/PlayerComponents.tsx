@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Check } from "lucide-react";
 import { QuestionBlock } from "../types";
 import { useInputStyle, CustomSelect } from "./UIComponents";
@@ -124,7 +124,6 @@ export const ClozeDropdownPlayer = ({ block, onChange, value }: { block: Questio
 export const DragInlinePlayer = ({ block, onChange, value }: { block: QuestionBlock, onChange: (val: any) => void, value: any }) => {
   const currentAnswers = value || {};
   
-  // Aggregate word bank from all lines
   const availableWords = useMemo(() => {
     const allWords: string[] = [];
     block.listItems?.forEach(line => {
@@ -135,7 +134,6 @@ export const DragInlinePlayer = ({ block, onChange, value }: { block: QuestionBl
     const counts: Record<string, number> = {};
     allWords.forEach(w => { counts[w] = (counts[w] || 0) + 1; });
     
-    // Decrement counts for used answers
     Object.values(currentAnswers).forEach((ans: any) => {
       if (typeof ans === 'string' && counts[ans]) counts[ans]--;
     });
@@ -176,7 +174,6 @@ export const DragInlinePlayer = ({ block, onChange, value }: { block: QuestionBl
         })}
       </div>
 
-      {/* Word Bank Styled like Input */}
       {availableWords.length > 0 ? (
         <div className="p-4 bg-white border border-slate-200 rounded-md shadow-sm flex flex-wrap gap-2">
           <span className="text-xs font-bold text-slate-400 uppercase w-full mb-1">Word Bank</span>
