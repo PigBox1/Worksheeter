@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useContext } from "react";
 import { createRoot } from "react-dom/client";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
@@ -29,7 +29,10 @@ import {
   Pencil,
   HelpCircle,
   ChevronDown,
-  CheckSquare
+  CheckSquare,
+  Heart,
+  AlertTriangle,
+  Copy
 } from "lucide-react";
 
 // --- Types & Interfaces ---
@@ -60,11 +63,10 @@ interface EmbedBlock extends BaseBlock {
 interface QuestionBlock extends BaseBlock {
   type: 'question';
   qType: QuestionType;
-  prompt: string; // Acts as Title for complex questions
-  listItems?: string[]; // For multi-line cloze/drag questions
-  image?: string | null; // URL
+  prompt: string;
+  listItems?: string[]; 
+  image?: string | null; 
   description?: string | null;
-  // For MC
   options?: string[];
   multiSelect?: boolean;
   correctAnswer?: string | string[]; 
@@ -79,7 +81,7 @@ interface GroupBlock extends BaseBlock {
 type Block = TextBlock | DividerBlock | EmbedBlock | QuestionBlock | GroupBlock;
 
 interface DesignSettings {
-  accentColor: string; // Hex code
+  accentColor: string; 
   font: 'sans' | 'serif' | 'mono';
 }
 
@@ -101,7 +103,7 @@ interface DragItem {
 // --- Context ---
 
 const ThemeContext = React.createContext<DesignSettings>({
-  accentColor: '#6366f1', // Default Indigo-500
+  accentColor: '#6366f1', 
   font: 'sans'
 });
 
@@ -153,6 +155,14 @@ const decodeState = (hash: string): WorksheetData | null => {
   }
 };
 
+const duplicateBlockHelper = (block: Block): Block => {
+  const newId = generateId();
+  if (block.type === 'group') {
+    return { ...block, id: newId, children: (block as GroupBlock).children.map(duplicateBlockHelper) as (QuestionBlock | TextBlock)[] };
+  }
+  return { ...block, id: newId };
+};
+
 // --- CSS Variable Generator ---
 const ThemeStyle = ({ color }: { color: string }) => {
   return (
@@ -195,9 +205,10 @@ interface TooltipButtonProps {
   className?: string;
   dragPayload?: { type: BlockType, qType?: QuestionType };
   active?: boolean;
+  onDragEnd?: () => void;
 }
 
-const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload, active }: TooltipButtonProps) => {
+const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload, active, onDragEnd }: TooltipButtonProps) => {
   const handleDragStart = (e: React.DragEvent) => {
     if (!dragPayload) return;
     const dragData: DragItem = { 
@@ -214,6 +225,7 @@ const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload
         onClick={onClick}
         draggable={!!dragPayload}
         onDragStart={handleDragStart}
+        onDragEnd={onDragEnd}
         className={`p-2.5 rounded-xl transition-all ${active ? 'bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'} cursor-grab active:cursor-grabbing ${className}`}
       >
         <Icon size={20} strokeWidth={active ? 2.5 : 2} />
@@ -229,7 +241,7 @@ const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload
 // --- Player Components ---
 
 const useInputStyle = () => {
-  return `bg-white border border-slate-300 rounded-md px-2 py-1 text-slate-800 shadow-sm focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-200)] outline-none transition-all`;
+  return `bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-800 shadow-sm focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-200)] outline-none transition-all`;
 }
 
 // Custom Select Component for Dropdown Cloze
@@ -513,13 +525,16 @@ interface EditorBlockWrapperProps {
   label?: string;
   updateBlock: (id: string, parentId: string | undefined, newData: Block) => void;
   removeBlock: (id: string, parentId: string | undefined) => void;
+  duplicateBlock: (block: Block, parentId?: string) => void;
   handleDrop: (e: React.DragEvent, targetId?: string, targetParentId?: string, targetIndex?: number) => void;
   dragTarget?: { id: string, pos: 'top' | 'bottom' } | null;
   setDragTarget?: (t: { id: string, pos: 'top' | 'bottom' } | null) => void;
+  onDragEnd: () => void;
 }
 
-const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, removeBlock, handleDrop, dragTarget, setDragTarget }: EditorBlockWrapperProps) => {
+const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, removeBlock, duplicateBlock, handleDrop, dragTarget, setDragTarget, onDragEnd }: EditorBlockWrapperProps) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [draggedOptionIdx, setDraggedOptionIdx] = useState<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   
   const onBadgeDragStart = (e: React.DragEvent) => {
@@ -562,6 +577,30 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
     handleDrop(e, undefined, parentId, isTop ? index : index + 1);
   };
 
+  // Internal Drag Logic for Options/Sentences
+  const handleItemDragStart = (e: React.DragEvent, idx: number) => {
+    e.stopPropagation();
+    setDraggedOptionIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleItemDrop = (e: React.DragEvent, dropIdx: number, type: 'options' | 'listItems') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedOptionIdx === null || draggedOptionIdx === dropIdx) return;
+
+    const qBlock = block as QuestionBlock;
+    const list = type === 'options' ? [...(qBlock.options || [])] : [...(qBlock.listItems || [])];
+    const item = list[draggedOptionIdx];
+    list.splice(draggedOptionIdx, 1);
+    list.splice(dropIdx, 0, item);
+
+    if (type === 'options') updateBlock(block.id, parentId, { ...qBlock, options: list });
+    else updateBlock(block.id, parentId, { ...qBlock, listItems: list });
+    
+    setDraggedOptionIdx(null);
+  };
+
   // Determine if we need to show helpers for cloze/drag
   const showHelper = block.type === 'question' && ['cloze-text', 'cloze-dropdown', 'drag-inline'].includes((block as QuestionBlock).qType);
 
@@ -588,6 +627,7 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
             <div 
               draggable
               onDragStart={onBadgeDragStart}
+              onDragEnd={onDragEnd}
               className="cursor-grab active:cursor-grabbing flex items-center justify-center text-slate-300 hover:text-slate-600 p-1 rounded hover:bg-slate-100 transition-colors"
             >
               <GripVertical size={20} />
@@ -628,8 +668,15 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
                     <div className="w-px bg-slate-200 mx-0.5"></div>
                   </>
                 )}
+                
+                {/* Duplicate Button */}
+                <button title="Duplicate" onClick={() => duplicateBlock(block, parentId)} className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-900">
+                    <Copy size={14} />
+                </button>
+
+                {/* Delete Button (X) */}
                 <button title="Delete" onClick={() => removeBlock(block.id, parentId)} className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500">
-                    <Trash2 size={14} />
+                    <X size={14} />
                 </button>
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white"></div>
             </div>
@@ -724,7 +771,17 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
                         <span className="text-xs font-bold text-slate-400 uppercase">Options</span>
                      </div>
                      {block.options?.map((opt: string, optIdx: number) => (
-                     <div key={optIdx} className="flex items-center gap-2">
+                     <div 
+                        key={optIdx} 
+                        className="flex items-center gap-2 group/opt"
+                        draggable
+                        onDragStart={(e) => handleItemDragStart(e, optIdx)}
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onDrop={(e) => handleItemDrop(e, optIdx, 'options')}
+                     >
+                        <div className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 opacity-0 group-hover/opt:opacity-100 transition-opacity">
+                           <GripVertical size={14} />
+                        </div>
                         <div className={`w-4 h-4 ${(block as QuestionBlock).multiSelect ? 'rounded-md' : 'rounded-full'} border border-slate-300 flex-shrink-0`} />
                         <input 
                            className={`flex-1 text-sm p-1 border-b border-transparent hover:border-slate-200 focus:border-[var(--primary-300)] outline-none bg-transparent`}
@@ -738,7 +795,7 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
                         <button onClick={() => updateBlock(block.id, parentId, { ...block, options: block.options?.filter((_, i) => i !== optIdx) })} className="text-slate-300 hover:text-red-400"><X size={14} /></button>
                      </div>
                      ))}
-                     <button onClick={() => updateBlock(block.id, parentId, { ...block, options: [...(block.options || []), `Option ${(block.options?.length || 0) + 1}`] })} className={`text-xs text-[var(--primary)] font-medium hover:underline flex items-center gap-1 mt-2`}>
+                     <button onClick={() => updateBlock(block.id, parentId, { ...block, options: [...(block.options || []), `Option ${(block.options?.length || 0) + 1}`] })} className={`text-xs text-[var(--primary)] font-medium hover:underline flex items-center gap-1 mt-2 pl-6`}>
                        <Plus size={12} /> Add Option
                      </button>
                   </div>
@@ -749,8 +806,18 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
                    <div className="space-y-3 pl-1">
                       <div className="text-xs font-bold text-slate-400 uppercase mb-2">Sentences</div>
                       {block.listItems?.map((item: string, itemIdx: number) => (
-                         <div key={itemIdx} className="flex items-start gap-2">
-                            <span className="text-slate-300 mt-2 text-xs">{itemIdx + 1}.</span>
+                         <div 
+                            key={itemIdx} 
+                            className="flex items-start gap-2 group/list"
+                            draggable
+                            onDragStart={(e) => handleItemDragStart(e, itemIdx)}
+                            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            onDrop={(e) => handleItemDrop(e, itemIdx, 'listItems')}
+                         >
+                            <div className="mt-2 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 opacity-0 group-hover/list:opacity-100 transition-opacity">
+                               <GripVertical size={14} />
+                            </div>
+                            <span className="text-slate-300 mt-2 text-xs select-none w-4">{itemIdx + 1}.</span>
                             <textarea 
                                 className="flex-1 text-sm p-2 bg-slate-50 border border-slate-200 rounded focus:border-[var(--primary-300)] outline-none resize-none font-medium text-slate-700"
                                 value={item}
@@ -764,7 +831,7 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
                             <button onClick={() => updateBlock(block.id, parentId, { ...block, listItems: block.listItems?.filter((_, i) => i !== itemIdx) })} className="text-slate-300 hover:text-red-400 mt-2"><X size={14} /></button>
                          </div>
                       ))}
-                      <button onClick={() => updateBlock(block.id, parentId, { ...block, listItems: [...(block.listItems || []), 'New sentence with [answer]...'] })} className={`text-xs text-[var(--primary)] font-medium hover:underline flex items-center gap-1 mt-2`}>
+                      <button onClick={() => updateBlock(block.id, parentId, { ...block, listItems: [...(block.listItems || []), 'New sentence with [answer]...'] })} className={`text-xs text-[var(--primary)] font-medium hover:underline flex items-center gap-1 mt-2 pl-9`}>
                         <Plus size={12} /> Add Sentence
                       </button>
                    </div>
@@ -800,7 +867,7 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
              <div className={`space-y-0`}>
                 {block.children.map((child, childIdx) => {
                    const childLabel = label ? `${label}${String.fromCharCode(97 + childIdx)}` : undefined;
-                   return <EditorBlockWrapper key={child.id} block={child} index={childIdx} parentId={block.id} label={childLabel} updateBlock={updateBlock} removeBlock={removeBlock} handleDrop={handleDrop} />
+                   return <EditorBlockWrapper key={child.id} block={child} index={childIdx} parentId={block.id} label={childLabel} updateBlock={updateBlock} removeBlock={removeBlock} duplicateBlock={duplicateBlock} handleDrop={handleDrop} onDragEnd={onDragEnd} />
                 })}
              </div>
              {block.children.length === 0 && <div className={`text-center py-8 text-[var(--primary-300)] text-sm border-2 border-dashed border-[var(--primary-100)] rounded-lg`}>Drag questions here</div>}
@@ -822,7 +889,9 @@ const QuestionBoard = () => {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'} | null>(null);
+  const [draggedItem, setDraggedItem] = useState<DragItem | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -841,6 +910,11 @@ const QuestionBoard = () => {
     navigator.clipboard.writeText(window.location.href);
     alert("Link copied to clipboard!");
   };
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedItem(null);
+    setDragTarget(null);
+  }, []);
 
   const updateBlock = useCallback((id: string, parentId: string | undefined, newData: Block) => {
     setData(prev => {
@@ -876,6 +950,31 @@ const QuestionBoard = () => {
           const parent = { ...newBlocks[parentIdx] } as GroupBlock;
           parent.children = parent.children.filter(b => b.id !== id);
           newBlocks[parentIdx] = parent;
+        }
+      }
+      return { ...prev, blocks: newBlocks };
+    });
+  }, []);
+
+  const duplicateBlock = useCallback((block: Block, parentId?: string) => {
+    setData(prev => {
+      const newBlock = duplicateBlockHelper(block);
+      let newBlocks = [...prev.blocks];
+      
+      if (!parentId) {
+        const idx = newBlocks.findIndex(b => b.id === block.id);
+        if (idx !== -1) newBlocks.splice(idx + 1, 0, newBlock);
+      } else {
+        const parentIdx = newBlocks.findIndex(b => b.id === parentId);
+        if (parentIdx !== -1) {
+          const parent = { ...newBlocks[parentIdx] } as GroupBlock;
+          const childIdx = parent.children.findIndex(b => b.id === block.id);
+          if (childIdx !== -1) {
+            const newChildren = [...parent.children];
+            newChildren.splice(childIdx + 1, 0, newBlock as (QuestionBlock | TextBlock));
+            parent.children = newChildren;
+            newBlocks[parentIdx] = parent;
+          }
         }
       }
       return { ...prev, blocks: newBlocks };
@@ -919,12 +1018,9 @@ const QuestionBoard = () => {
 
       if (!targetParentId) {
         let insertIdx = targetIndex !== undefined ? targetIndex : newBlocks.length;
-        
-        // Adjust index if moving within the same list and moving downwards
         if (item.type !== 'new-block' && !item.parentId && originalIndex !== -1 && originalIndex < insertIdx) {
             insertIdx--;
         }
-
         if (targetId && targetIndex === undefined) {
            const tIdx = newBlocks.findIndex(b => b.id === targetId);
            if (tIdx !== -1) insertIdx = tIdx + 1;
@@ -936,12 +1032,9 @@ const QuestionBoard = () => {
            const parent = { ...newBlocks[parentIdx] } as GroupBlock;
            parent.children = [...parent.children];
            let insertIdx = targetIndex !== undefined ? targetIndex : parent.children.length;
-
-           // Adjust index if moving within the same group and moving downwards
            if (item.type !== 'new-block' && item.parentId === targetParentId && originalIndex !== -1 && originalIndex < insertIdx) {
              insertIdx--;
            }
-
            if (targetId && targetIndex === undefined) {
               const tIdx = parent.children.findIndex(b => b.id === targetId);
               if (tIdx !== -1) insertIdx = tIdx + 1;
@@ -952,15 +1045,16 @@ const QuestionBoard = () => {
       }
       return { ...prev, blocks: newBlocks };
     });
+    setDraggedItem(null);
+    setDragTarget(null);
   }, []);
 
-  // Compute segments logic with guaranteed first segment for header
   const segments = React.useMemo(() => {
     const segs: Block[][] = [];
     let currentSegment: Block[] = [];
     data.blocks.forEach(block => {
       if (block.type === 'divider') {
-        segs.push(currentSegment); // Push even if empty so index exists
+        segs.push(currentSegment);
         segs.push([block]); 
         currentSegment = [];
       } else {
@@ -976,29 +1070,23 @@ const QuestionBoard = () => {
     setTimeout(async () => {
       const element = document.getElementById('preview-container');
       if (!element) return;
-      
       const canvas = await html2canvas(element, { scale: 2 });
       const imgData = canvas.toDataURL('image/png');
-      
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
       let heightLeft = pdfHeight;
       let position = 0;
       const pageHeight = pdf.internal.pageSize.getHeight();
-
       pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
       heightLeft -= pageHeight;
-
       while (heightLeft >= 0) {
         position = heightLeft - pdfHeight;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
         heightLeft -= pageHeight;
       }
-      
       pdf.save(`worksheet-${data.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
     }, 500);
   };
@@ -1009,51 +1097,68 @@ const QuestionBoard = () => {
   return (
     <ThemeContext.Provider value={data.design || { accentColor: '#6366f1', font: 'sans' }}>
       <ThemeStyle color={data.design?.accentColor || '#6366f1'} />
-      <div className={`min-h-screen pb-40 bg-slate-50 selection:bg-[var(--primary-100)] selection:text-[var(--primary-900)]`}>
+      <div className={`min-h-screen pb-40 bg-slate-50 selection:bg-[var(--primary-100)] selection:text-[var(--primary-900)] flex flex-col items-center`}>
         
-        {/* Fixed Top Bar */}
-        <div className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm font-sans">
+        <div className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm font-sans w-full">
            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-[var(--primary)] rounded-lg flex items-center justify-center text-white font-bold">Q</div>
-              <span className="font-bold text-slate-800">Question Board</span>
+              <div className="w-8 h-8 bg-[var(--primary)] rounded-lg flex items-center justify-center text-white font-bold">W</div>
+              <span className="font-bold text-slate-800">Worksheeter</span>
            </div>
         </div>
 
-        {/* Main Workspace */}
-        <div className={`max-w-5xl mx-auto p-4 md:p-12 pt-32 ${data.design?.font === 'serif' ? 'font-serif' : data.design?.font === 'mono' ? 'font-mono' : 'font-sans'}`} id="preview-container">
+        <div className={`w-full max-w-5xl px-4 md:px-12 pt-32 ${data.design?.font === 'serif' ? 'font-serif' : data.design?.font === 'mono' ? 'font-mono' : 'font-sans'}`} id="preview-container">
             
-            {/* Mode: Editor */}
             {mode === 'edit' ? (
               <div className="space-y-8">
+                 {/* Clear Confirmation Modal */}
+                 {showClearConfirm && (
+                   <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 font-sans">
+                      <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-in zoom-in-95">
+                         <div className="flex items-center gap-3 text-red-600 mb-4">
+                            <AlertTriangle size={24} />
+                            <h3 className="font-bold text-lg">Clear Worksheet?</h3>
+                         </div>
+                         <p className="text-slate-600 mb-6">This will remove all questions and reset the worksheet. This action cannot be undone.</p>
+                         <div className="flex justify-end gap-3">
+                            <button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 rounded-lg font-medium text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
+                            <button onClick={() => { setData(prev => ({ ...prev, blocks: [] })); setShowClearConfirm(false); }} className="px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">Clear All</button>
+                         </div>
+                      </div>
+                   </div>
+                 )}
+
                  {segments.map((segment, segIdx) => {
                     const isDividerSegment = segment.length === 1 && segment[0].type === 'divider';
                     
                     if (isDividerSegment) {
                        return (
-                          <div key={segment[0].id} className="group relative h-10 flex items-center justify-center my-4 cursor-grab"
+                          <div key={segment[0].id} className="group relative h-16 flex items-center justify-center my-4 cursor-grab"
                              draggable
                              onDragStart={(e) => { e.dataTransfer.setData("dragData", JSON.stringify({ id: segment[0].id, index: 0, type: 'block' })); }}
-                             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-                             onDrop={(e) => handleDragDrop(e, undefined, undefined, segments.slice(0, segIdx+1).reduce((acc, s) => acc + s.length, 0) + 1)}
+                             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; e.currentTarget.classList.add('bg-blue-50/50'); }}
+                             onDragLeave={(e) => { e.currentTarget.classList.remove('bg-blue-50/50'); }}
+                             onDrop={(e) => {
+                                e.currentTarget.classList.remove('bg-blue-50/50');
+                                const insertIndex = segments.slice(0, segIdx+1).reduce((acc, s) => acc + s.length, 0);
+                                handleDragDrop(e, undefined, undefined, insertIndex);
+                             }}
+                             onDragEnd={handleDragEnd}
                           >
-                             <div className="absolute bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full border border-slate-200 flex items-center gap-2 z-10 font-sans">
+                             <div className="absolute bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full border border-slate-200 flex items-center gap-2 z-10 font-sans group-hover:scale-110 transition-transform">
                                 <Divide size={12} /> Page Break
                              </div>
                              <div className="w-full h-px bg-slate-300 border-dashed border-t border-slate-300"></div>
-                             <button onClick={() => removeBlock(segment[0].id, undefined)} className="absolute right-0 top-1 p-2 text-slate-400 hover:text-red-500 bg-white rounded-full shadow border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                             <button onClick={() => removeBlock(segment[0].id, undefined)} className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 bg-white rounded-full shadow border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                                 <X size={14}/>
                              </button>
                           </div>
                        )
                     }
 
-                    // Only render empty segments if it's the first one (Title page)
                     if (segment.length === 0 && segIdx !== 0) return null;
 
                     return (
                        <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative">
-                          
-                          {/* Header Logic: Adjust spacing */}
                           {segIdx === 0 && (
                             <div className={`space-y-4 pt-4 ${segment.length > 0 ? 'mb-12 border-b border-slate-100 pb-10' : ''}`}>
                               <input 
@@ -1074,7 +1179,23 @@ const QuestionBoard = () => {
                           <div 
                              className={`${segment.length === 0 && segIdx !== 0 ? 'min-h-[100px] flex items-center justify-center border-2 border-dashed border-slate-100 rounded-lg bg-slate-50' : ''}`}
                              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-                             onDrop={(e) => handleDragDrop(e, undefined, undefined, undefined)}
+                             onDrop={(e) => {
+                                // Smart Container Drop Logic
+                                const segmentStartIndex = segments.slice(0, segIdx).reduce((acc, s) => acc + s.length, 0);
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const isTop = (e.clientY - rect.top) < (rect.height / 2);
+                                
+                                if (segment.length > 0) {
+                                    // If we drop on the container background, infer intent based on position
+                                    if (isTop) {
+                                        handleDragDrop(e, undefined, undefined, segmentStartIndex);
+                                    } else {
+                                        handleDragDrop(e, segment[segment.length-1].id); // Append to end
+                                    }
+                                } else {
+                                    handleDragDrop(e, undefined, undefined, segmentStartIndex);
+                                }
+                             }}
                           >
                              {segment.length === 0 && segIdx !== 0 && ( <div className="text-center text-slate-400"><p>Empty Page</p></div> )}
                              {segment.map((block, index) => {
@@ -1085,7 +1206,6 @@ const QuestionBoard = () => {
                                   questionCounter++;
                                   label = questionCounter.toString();
                                 }
-                                
                                 return (
                                   <EditorBlockWrapper 
                                     key={block.id} 
@@ -1093,19 +1213,32 @@ const QuestionBoard = () => {
                                     index={index} 
                                     updateBlock={updateBlock} 
                                     removeBlock={removeBlock}
+                                    duplicateBlock={duplicateBlock}
                                     handleDrop={handleDragDrop}
                                     label={label}
                                     dragTarget={dragTarget}
                                     setDragTarget={setDragTarget}
+                                    onDragEnd={handleDragEnd}
                                   />
                                 );
                              })}
+                          </div>
+                          
+                          {/* Dedicated Drop Zone at End of Container */}
+                          <div 
+                             className="h-16 mt-4 -mb-12 border-2 border-transparent hover:border-blue-300 hover:bg-blue-50/50 rounded-lg transition-all flex items-center justify-center text-blue-300 opacity-0 hover:opacity-100 text-sm font-medium border-dashed"
+                             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                             onDrop={(e) => {
+                                const insertIndex = segments.slice(0, segIdx+1).reduce((acc, s) => acc + s.length, 0);
+                                handleDragDrop(e, undefined, undefined, insertIndex);
+                             }}
+                          >
+                             Drop here to append to page
                           </div>
                        </div>
                     );
                  })}
 
-                 {/* Empty State when no blocks exist at all */}
                  {data.blocks.length === 0 && segments.length <= 1 && (
                     <div className="text-center p-8 text-slate-400 font-sans">
                        <p>Start by adding questions from below</p>
@@ -1113,12 +1246,9 @@ const QuestionBoard = () => {
                  )}
               </div>
             ) : (
-               // Mode: Preview
                <div className="space-y-8">
                 {segments.map((segment, segIdx) => {
                     if (segment.length === 1 && segment[0].type === 'divider') return <div key={segment[0].id} className="h-px bg-slate-200 w-full my-8 break-before-page"></div>;
-                    
-                    // Don't render empty pages in preview
                     if (segment.length === 0 && segIdx !== 0) return null;
 
                     return (
@@ -1142,7 +1272,6 @@ const QuestionBoard = () => {
                                             {qNum}
                                         </div>
                                         <div className="flex-1">
-                                            {/* Question Body - Flex Row for Image Side-by-Side */}
                                             <div className="flex flex-col md:flex-row gap-6">
                                                 <div className="flex-1">
                                                     <div className="text-lg font-medium text-slate-900 mb-2">{q.prompt}</div>
@@ -1154,8 +1283,6 @@ const QuestionBoard = () => {
                                                     {q.qType === 'cloze-dropdown' && <ClozeDropdownPlayer block={q} value={answers[q.id]} onChange={(v) => setAnswers(prev => ({...prev, [q.id]: v}))} />}
                                                     {q.qType === 'drag-inline' && <DragInlinePlayer block={q} value={answers[q.id]} onChange={(v) => setAnswers(prev => ({...prev, [q.id]: v}))} />}
                                                 </div>
-                                                
-                                                {/* Image on the side */}
                                                 {q.image && ( 
                                                     <div className="md:w-1/3 max-w-[300px] flex-shrink-0">
                                                         <div className="rounded-lg overflow-hidden border border-slate-200 shadow-sm">
@@ -1200,37 +1327,32 @@ const QuestionBoard = () => {
             )}
         </div>
 
-        {/* Floating Bottom Toolbar (Dock) */}
+        <footer className="mt-12 mb-8 text-center text-slate-400 text-sm flex items-center justify-center gap-1 font-sans opacity-70 hover:opacity-100 transition-opacity">
+           made with <Heart size={14} className="text-red-500 fill-red-500" /> (and gemini) by daniel
+        </footer>
+
         {mode === 'edit' && (
            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
               <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1 md:gap-2">
-                 
-                 {/* Section 1: Structure */}
                  <div className="flex gap-1 px-1">
-                    <TooltipButton icon={Type} label="Text" onClick={() => addBlock('text')} dragPayload={{type: 'text'}} />
-                    <TooltipButton icon={Heading} label="Group" onClick={() => addBlock('group')} dragPayload={{type: 'group'}} />
-                    <TooltipButton icon={LinkIcon} label="Embed" onClick={() => addBlock('embed')} dragPayload={{type: 'embed'}} />
-                    <TooltipButton icon={Divide} label="Break" onClick={() => addBlock('divider')} dragPayload={{type: 'divider'}} />
+                    <TooltipButton icon={Type} label="Text" onClick={() => addBlock('text')} dragPayload={{type: 'text'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={Heading} label="Group" onClick={() => addBlock('group')} dragPayload={{type: 'group'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={LinkIcon} label="Embed" onClick={() => addBlock('embed')} dragPayload={{type: 'embed'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={Divide} label="Break" onClick={() => addBlock('divider')} dragPayload={{type: 'divider'}} onDragEnd={handleDragEnd} />
                  </div>
-                 
                  <div className="w-px h-8 bg-slate-200 mx-1"></div>
-
-                 {/* Section 2: Questions */}
                  <div className="flex gap-1 px-1">
-                    <TooltipButton icon={ImageIcon} label="Multiple Choice" onClick={() => addBlock('question', 'multiple-choice')} dragPayload={{type: 'question', qType: 'multiple-choice'}} />
-                    <TooltipButton icon={TextCursorInput} label="Cloze (Text)" onClick={() => addBlock('question', 'cloze-text')} dragPayload={{type: 'question', qType: 'cloze-text'}} />
-                    <TooltipButton icon={ListOrdered} label="Cloze (Drop)" onClick={() => addBlock('question', 'cloze-dropdown')} dragPayload={{type: 'question', qType: 'cloze-dropdown'}} />
-                    <TooltipButton icon={MousePointerClick} label="Drag & Drop" onClick={() => addBlock('question', 'drag-inline')} dragPayload={{type: 'question', qType: 'drag-inline'}} />
-                    <TooltipButton icon={MessageSquare} label="Open Answer" onClick={() => addBlock('question', 'open-answer')} dragPayload={{type: 'question', qType: 'open-answer'}} />
+                    <TooltipButton icon={ImageIcon} label="Multiple Choice" onClick={() => addBlock('question', 'multiple-choice')} dragPayload={{type: 'question', qType: 'multiple-choice'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={TextCursorInput} label="Cloze (Text)" onClick={() => addBlock('question', 'cloze-text')} dragPayload={{type: 'question', qType: 'cloze-text'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={ListOrdered} label="Cloze (Drop)" onClick={() => addBlock('question', 'cloze-dropdown')} dragPayload={{type: 'question', qType: 'cloze-dropdown'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={MousePointerClick} label="Drag & Drop" onClick={() => addBlock('question', 'drag-inline')} dragPayload={{type: 'question', qType: 'drag-inline'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={MessageSquare} label="Open Answer" onClick={() => addBlock('question', 'open-answer')} dragPayload={{type: 'question', qType: 'open-answer'}} onDragEnd={handleDragEnd} />
                  </div>
-
                  <div className="w-px h-8 bg-slate-200 mx-1"></div>
-
-                 {/* Section 3: Actions */}
                  <div className="flex gap-1 px-1 relative">
                     <TooltipButton icon={Palette} label="Design" active={showSettings} onClick={() => setShowSettings(!showSettings)} />
                     <TooltipButton icon={Eye} label="Preview" onClick={() => setMode('preview')} />
-                    
+                    <TooltipButton icon={Trash2} label="Clear All" onClick={() => setShowClearConfirm(true)} />
                     {/* Settings Popover */}
                     {showSettings && (
                        <div className="absolute bottom-full right-0 mb-4 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-5 animate-in fade-in zoom-in-95 origin-bottom-right">
@@ -1238,30 +1360,17 @@ const QuestionBoard = () => {
                              <h3 className="font-bold text-slate-800">Design</h3>
                              <button onClick={() => setShowSettings(false)}><X size={16} className="text-slate-400 hover:text-slate-600"/></button>
                           </div>
-                          
                           <div className="space-y-6">
                              <div>
                                 <label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><Palette size={12}/> Accent Color</label>
                                 <div className="flex flex-wrap gap-2">
                                     {presetColors.map(c => (
-                                        <button 
-                                            key={c}
-                                            onClick={() => setData(prev => ({...prev, design: {...prev.design!, accentColor: c}}))}
-                                            className={`w-8 h-8 rounded-full border-2 ${data.design?.accentColor === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-110'} transition-transform shadow-sm`}
-                                            style={{backgroundColor: c}}
-                                        />
+                                        <button key={c} onClick={() => setData(prev => ({...prev, design: {...prev.design!, accentColor: c}}))} className={`w-8 h-8 rounded-full border-2 ${data.design?.accentColor === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-110'} transition-transform shadow-sm`} style={{backgroundColor: c}} />
                                     ))}
-                                    {/* Custom Color Button */}
                                     <div className="relative">
-                                       <button 
-                                          onClick={() => setShowColorPicker(!showColorPicker)}
-                                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center bg-white ${!presetColors.includes(data.design?.accentColor || '') ? 'border-slate-800' : 'border-slate-200'} hover:border-slate-400 transition-colors shadow-sm`}
-                                          style={!presetColors.includes(data.design?.accentColor || '') ? {backgroundColor: data.design?.accentColor} : {}}
-                                       >
+                                       <button onClick={() => setShowColorPicker(!showColorPicker)} className={`w-8 h-8 rounded-full border-2 flex items-center justify-center bg-white ${!presetColors.includes(data.design?.accentColor || '') ? 'border-slate-800' : 'border-slate-200'} hover:border-slate-400 transition-colors shadow-sm`} style={!presetColors.includes(data.design?.accentColor || '') ? {backgroundColor: data.design?.accentColor} : {}}>
                                           <Pencil size={12} className={!presetColors.includes(data.design?.accentColor || '') ? 'text-white mix-blend-difference' : 'text-slate-400'}/>
                                        </button>
-                                       
-                                       {/* Custom Picker Popup */}
                                        {showColorPicker && (
                                           <div className="absolute bottom-full right-0 mb-2 p-3 bg-white shadow-xl border border-slate-200 rounded-xl z-[60] flex flex-col gap-3 w-48 animate-in slide-in-from-bottom-2">
                                               <div className="flex gap-2 items-center">
@@ -1280,13 +1389,7 @@ const QuestionBoard = () => {
                                 <label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><TypeIcon size={12}/> Typography</label>
                                 <div className="flex bg-slate-100 p-1 rounded-lg">
                                     {['sans', 'serif', 'mono'].map(f => (
-                                       <button 
-                                          key={f}
-                                          onClick={() => setData(prev => ({...prev, design: {...prev.design!, font: f as any}}))}
-                                          className={`flex-1 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${data.design?.font === f ? `bg-white text-slate-900 shadow-sm` : 'text-slate-500 hover:text-slate-700'}`}
-                                       >
-                                          {f}
-                                       </button>
+                                       <button key={f} onClick={() => setData(prev => ({...prev, design: {...prev.design!, font: f as any}}))} className={`flex-1 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${data.design?.font === f ? `bg-white text-slate-900 shadow-sm` : 'text-slate-500 hover:text-slate-700'}`}>{f}</button>
                                     ))}
                                  </div>
                              </div>
@@ -1300,7 +1403,6 @@ const QuestionBoard = () => {
            </div>
         )}
 
-        {/* Preview Floating Toolbar */}
         {mode === 'preview' && (
            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
               <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1">
