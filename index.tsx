@@ -1198,9 +1198,10 @@ const QuestionBoard = () => {
                              }}
                           >
                              {segment.length === 0 && segIdx !== 0 && ( <div className="text-center text-slate-400"><p>Empty Page</p></div> )}
-                             {segment.map((block, index) => {
+                             {segment.map((block) => {
                                 const isQuestion = block.type === 'question';
                                 const isGroup = block.type === 'group';
+                                const globalIndex = data.blocks.indexOf(block);
                                 let label;
                                 if (isQuestion || isGroup) {
                                   questionCounter++;
@@ -1210,7 +1211,7 @@ const QuestionBoard = () => {
                                   <EditorBlockWrapper 
                                     key={block.id} 
                                     block={block} 
-                                    index={index} 
+                                    index={globalIndex} 
                                     updateBlock={updateBlock} 
                                     removeBlock={removeBlock}
                                     duplicateBlock={duplicateBlock}
