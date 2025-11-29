@@ -368,7 +368,7 @@ export const QuestionBoard = () => {
                     if (segment.length === 0 && segIdx !== 0) return null;
 
                     return (
-                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative">
+                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative transition-all duration-300">
                           {segIdx === 0 && (
                             <div className={`space-y-4 pt-4 ${segment.length > 0 ? 'mb-12 border-b border-slate-100 pb-10' : ''}`}>
                               <input 
@@ -406,7 +406,6 @@ export const QuestionBoard = () => {
                              }}
                           >
                              {segment.length === 0 && segIdx !== 0 && ( <div className="text-center text-slate-400"><p>Empty Page</p></div> )}
-                             {/* Render Top Level Blocks */}
                              {segment.map((block, index) => {
                                 const isQuestion = block.type === 'question';
                                 const isGroup = block.type === 'group';
@@ -474,20 +473,21 @@ export const QuestionBoard = () => {
                              </div>
                           )}
 
-                          {/* PREVIEW MODE RENDER LOOP */}
                           {segment.map((block) => {
+                             // Calculate numbering for root items
+                             const globalIndex = data.blocks.findIndex(b => b.id === block.id);
+                             const relevantBlocks = data.blocks.slice(0, globalIndex + 1).filter(b => b.type === 'question' || b.type === 'group');
+                             const label = (block.type === 'question' || block.type === 'group') ? getNumbering(0, relevantBlocks.length - 1) : '';
                              
-                             const renderPreviewBlock = (b: Block, depth: number): React.ReactNode => {
+                             const renderPreviewBlock = (b: Block, lbl: string, depth: number): React.ReactNode => {
                                 if (b.type === 'text') return <SimpleMarkdown text={b.content} />;
                                 if (b.type === 'embed') return <EmbedRenderer url={b.url} title={b.title} />;
                                 if (b.type === 'question') {
-                                  previewQuestionCounter++; // Increment global counter for questions
-                                  const qNum = previewQuestionCounter;
-                                  const q = b as any;
+                                  const q = b as any; 
                                   return (
                                       <div className="flex gap-4">
                                         <div className={`flex-shrink-0 w-8 h-8 rounded-lg ${depth === 0 ? 'bg-[var(--primary-100)] text-[var(--primary-700)]' : 'bg-slate-100 text-slate-600'} font-bold flex items-center justify-center text-sm select-none font-sans`}>
-                                            {qNum}
+                                            {lbl.replace('.','')}
                                         </div>
                                         <div className="flex-1">
                                             <div className="flex flex-col md:flex-row gap-6">
@@ -509,12 +509,19 @@ export const QuestionBoard = () => {
                                 if (b.type === 'group') {
                                    const g = b as GroupBlock;
                                    return (
-                                      <div className="space-y-6">
-                                         {g.title && <h3 className="text-xl font-bold text-slate-800 mb-4">{g.title}</h3>}
-                                         <div className="space-y-6 ml-2 md:ml-6">
-                                            {g.children.map((child) => (
-                                               <div key={child.id}>{renderPreviewBlock(child, depth + 1)}</div>
-                                            ))}
+                                      <div className="flex gap-4">
+                                         <div className={`flex-shrink-0 w-8 h-8 rounded-lg ${depth === 0 ? 'bg-[var(--primary-100)] text-[var(--primary-700)]' : 'bg-slate-100 text-slate-600'} font-bold flex items-center justify-center text-sm select-none font-sans`}>
+                                            {lbl.replace('.','')}
+                                         </div>
+                                         <div className="flex-1 space-y-6">
+                                            {g.title && <h3 className="text-xl font-bold text-slate-800 mb-2">{g.title}</h3>}
+                                            <div className="space-y-6 ml-2 md:ml-0">
+                                                {g.children.map((child, cIdx) => {
+                                                const relevantChildren = g.children.slice(0, cIdx + 1).filter(c => c.type === 'question' || c.type === 'group');
+                                                const childLabel = (child.type === 'question' || child.type === 'group') ? getNumbering(depth + 1, relevantChildren.length - 1) : '';
+                                                return <div key={child.id}>{renderPreviewBlock(child, childLabel, depth + 1)}</div>
+                                                })}
+                                            </div>
                                          </div>
                                       </div>
                                    )
@@ -522,7 +529,7 @@ export const QuestionBoard = () => {
                                 return null;
                              };
 
-                             return <div key={block.id}>{renderPreviewBlock(block, 0)}</div>
+                             return <div key={block.id}>{renderPreviewBlock(block, label, 0)}</div>
                           })}
                       </div>
                     );

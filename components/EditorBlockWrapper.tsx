@@ -61,19 +61,14 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
       const isTop = e.clientY < rect.top + 20; 
       const isBottom = e.clientY > rect.bottom - 20;
       
-      if (block.type === 'group' && !isTop && !isBottom && e.clientY < rect.top + 80 && depth < 2) {
+      // Limit max indentation to 2 (Root -> Indent 1). So depth 0 can accept inside, depth 1 cannot.
+      if (block.type === 'group' && !isTop && !isBottom && e.clientY < rect.top + 80 && depth < 1) {
          setDragTarget({ id: block.id, pos: 'inside' });
       } else {
          setDragTarget({ id: block.id, pos: isTop ? 'top' : 'bottom' });
       }
     }
   };
-
-  const onDragLeave = (e: React.DragEvent) => {
-     if (setDragTarget && !e.currentTarget.contains(e.relatedTarget as Node)) {
-        
-     }
-  }
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -84,7 +79,7 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
     const isTop = e.clientY < rect.top + 20;
     const isBottom = e.clientY > rect.bottom - 20;
 
-    if (block.type === 'group' && !isTop && !isBottom && e.clientY < rect.top + 80 && depth < 2) {
+    if (block.type === 'group' && !isTop && !isBottom && e.clientY < rect.top + 80 && depth < 1) {
         handleDrop(e, undefined, block.id, (block as GroupBlock).children.length);
     } else {
         handleDrop(e, undefined, parentId, isTop ? index : index + 1);
@@ -119,8 +114,10 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
   const isGroupBlock = block.type === 'group';
   const isGroupDrag = draggedType === 'group';
   const isDividerDrag = draggedType === 'divider';
-  const isMaxDepth = depth >= 2;
-  // Check constraints: No groups deep nested, no dividers in groups
+  // Max depth allowed is 1 (Root -> Level 1). Level 2 is disabled.
+  const isMaxDepth = depth >= 1;
+  
+  // Constraints: No groups dropping into max depth, no dividers in groups
   const canDropInGroup = !(isGroupDrag && isMaxDepth) && !isDividerDrag;
 
   return (
@@ -130,7 +127,6 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
       onFocus={() => setIsFocused(true)}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false); }}
       onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
       {dragTarget?.id === block.id && dragTarget.pos !== 'inside' && (
@@ -221,10 +217,14 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
         )}
         {block.type === 'group' && (
           <div className={`bg-[var(--primary-50)]/30 rounded-xl p-6 border border-dashed ${dragTarget?.id === block.id && dragTarget.pos === 'inside' ? 'border-[var(--primary)] bg-[var(--primary-100)]/50' : 'border-[var(--primary-200)]'} min-h-[150px] relative`}>
-             <div className="mb-6 flex gap-2 items-center"><input className={`w-full bg-transparent font-bold text-lg text-[var(--primary-900)] outline-none placeholder-[var(--primary-300)]`} placeholder="Group Title..." value={block.title || ''} onChange={(e) => updateBlock(block.id, parentId, { ...block, title: e.target.value })} /></div>
+             <div className="mb-6 flex gap-2 items-center">
+                {/* Fixed: Use font-medium to match question size, remove bigger text */}
+                <input className={`w-full bg-transparent font-medium text-lg text-[var(--primary-900)] outline-none placeholder-[var(--primary-300)]`} placeholder="Group Title..." value={block.title || ''} onChange={(e) => updateBlock(block.id, parentId, { ...block, title: e.target.value })} />
+             </div>
              <div className={`space-y-0`}>
                 {(block as GroupBlock).children.map((child, childIdx) => {
                    const relevantChildren = (block as GroupBlock).children.slice(0, childIdx + 1).filter(c => c.type === 'question' || c.type === 'group');
+                   // Fix numbering: use childIdx logic or passed getNumbering
                    const childLabel = (child.type === 'question' || child.type === 'group') ? getNumbering!(depth + 1, relevantChildren.length - 1) : undefined;
 
                    return (
@@ -251,7 +251,8 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
                 })}
              </div>
              
-             {((block as GroupBlock).children.length === 0 || isDraggingItem) && (
+             {/* Drop Zone inside Group */}
+             {((block as GroupBlock).children.length === 0 || isDraggingItem) && depth < 1 && (
                  <div 
                     className={`h-16 mt-4 border-2 border-dashed rounded-lg flex items-center justify-center text-xs font-medium transition-all
                         ${!canDropInGroup && isDraggingItem 
@@ -276,7 +277,7 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
                     }}
                  >
                     { !canDropInGroup && isDraggingItem 
-                        ? (isDividerDrag ? "Cannot drop page break in group" : "Max indentation reached (Group)") 
+                        ? (isDividerDrag ? "Cannot drop page break in group" : "Max indentation reached") 
                         : "Drag questions here" 
                     }
                  </div>
