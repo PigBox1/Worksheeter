@@ -15,16 +15,17 @@ import {
   X, 
   Type as TypeIcon, 
   Edit3, 
-  Share2, 
-  Download, 
   Heart, 
-  AlertTriangle,
-  Pencil
+  AlertTriangle, 
+  Pencil,
+  Copy,
+  Globe,
+  FileDown,
+  Check,
+  Share2
 } from "lucide-react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import { Block, BlockType, DragItem, QuestionType, WorksheetData, GroupBlock } from "./types";
-import { createBlock, decodeState, duplicateBlockHelper, encodeState } from "./helpers";
+import { Block, BlockType, DragItem, QuestionType, WorksheetData, GroupBlock, QuestionBlock, TextBlock } from "./types";
+import { createBlock, decodeState, duplicateBlockHelper, encodeState, downloadFile } from "./helpers";
 import { ThemeContext } from "./ThemeContext";
 import { ThemeStyle, TooltipButton, SimpleMarkdown, EmbedRenderer } from "./components/UIComponents";
 import { EditorBlockWrapper } from "./components/EditorBlockWrapper";
@@ -91,7 +92,7 @@ const insertBlockAt = (blocks: Block[], parentId: string | undefined, index: num
   });
 };
 
-export const QuestionBoard = () => {
+export const Builder = () => {
   const [data, setData] = useState<WorksheetData>({
     title: "Untitled Worksheet",
     description: "Fill out the questions below.",
@@ -103,9 +104,11 @@ export const QuestionBoard = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'|'inside'} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedType, setDraggedType] = useState<BlockType | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -117,13 +120,6 @@ export const QuestionBoard = () => {
       }
     }
   }, []);
-
-  const saveToUrl = () => {
-    const hash = encodeState(data);
-    window.location.hash = `data=${hash}`;
-    navigator.clipboard.writeText(window.location.href);
-    alert("Link copied to clipboard!");
-  };
 
   const handleDragEnd = useCallback(() => {
     setDragTarget(null);
@@ -187,7 +183,6 @@ export const QuestionBoard = () => {
       let movingBlock: Block;
       let currentBlocks = [...prev.blocks];
 
-      // 1. Get the block
       if (item.type === 'new-block') {
          if (!item.payload) return prev;
          movingBlock = createBlock(item.payload.type, item.payload.qType);
@@ -195,16 +190,11 @@ export const QuestionBoard = () => {
          const found = findBlock(currentBlocks, item.id!);
          if (!found) return prev;
          movingBlock = found;
-         // Remove from old position first
          currentBlocks = removeBlockRecursive(currentBlocks, item.id!);
       }
 
-      // Constraint: Dividers cannot be inside groups
-      if (movingBlock.type === 'divider' && targetParentId) {
-          return prev; // Reject drop
-      }
+      if (movingBlock.type === 'divider' && targetParentId) return prev;
 
-      // 2. Determine Insertion Index
       let finalIndex = targetIndex;
 
       if (targetId && finalIndex === undefined) {
@@ -229,9 +219,7 @@ export const QuestionBoard = () => {
       
       if (finalIndex === undefined) finalIndex = -1; 
 
-      // 3. Insert
       const finalBlocks = insertBlockAt(currentBlocks, targetParentId, finalIndex, movingBlock);
-
       return { ...prev, blocks: finalBlocks };
     });
     setDragTarget(null);
@@ -255,59 +243,6 @@ export const QuestionBoard = () => {
     return segs;
   }, [data.blocks]);
 
-  const handleDownloadPDF = async () => {
-    setMode('preview');
-    
-    // Need a moment for render to stabilize if switching modes
-    setTimeout(async () => {
-      const element = document.getElementById('preview-container');
-      if (!element) return;
-
-      // Clone the node to modify styles for PDF without affecting UI
-      const clone = element.cloneNode(true) as HTMLElement;
-      clone.style.width = '794px'; // A4 width at 96 DPI (approx)
-      clone.style.padding = '40px';
-      
-      // Remove container styles from the clone to look like "print"
-      // We target the bg-white, rounded, shadow divs
-      const containers = clone.querySelectorAll('.bg-white.rounded-xl.shadow-sm');
-      containers.forEach((c) => {
-          const el = c as HTMLElement;
-          el.style.boxShadow = 'none';
-          el.style.borderRadius = '0';
-          el.style.border = 'none';
-          el.style.backgroundColor = 'transparent';
-          el.style.padding = '0';
-          el.style.marginBottom = '20px';
-      });
-
-      // Temporarily append to body to capture
-      document.body.appendChild(clone);
-      
-      const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
-      document.body.removeChild(clone); // Clean up
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      let heightLeft = pdfHeight;
-      let position = 0;
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
-      while (heightLeft >= 0) {
-        position = heightLeft - pdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
-      }
-      pdf.save(`worksheet-${data.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
-    }, 500);
-  };
-
   const presetColors = ['#64748b', '#ef4444', '#f97316', '#f59e0b', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#d946ef', '#ec4899'];
   
   const getNumbering = (depth: number, index: number) => {
@@ -317,9 +252,19 @@ export const QuestionBoard = () => {
      return '';
   }
 
-  // Counters for numbering
   let questionCounter = 0;
   let previewQuestionCounter = 0;
+
+  // Publish Actions
+  const publishLink = `${window.location.origin}/answer#data=${encodeState(data)}`;
+  const handleCopyLink = () => {
+      navigator.clipboard.writeText(publishLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  };
+  const handleDownloadFile = () => {
+      downloadFile(`worksheet-${Date.now()}.wks`, JSON.stringify(data), 'application/json');
+  };
 
   return (
     <ThemeContext.Provider value={data.design || { accentColor: '#6366f1', font: 'sans' }}>
@@ -487,6 +432,46 @@ export const QuestionBoard = () => {
               </div>
             ) : (
                <div className="space-y-8">
+                  {/* Publish Modal */}
+                  {showPublishModal && (
+                     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 font-sans">
+                        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95">
+                           <div className="flex items-center justify-between mb-6">
+                              <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2"><Globe size={20} className="text-blue-500"/> Publish Worksheet</h3>
+                              <button onClick={() => setShowPublishModal(false)}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+                           </div>
+                           
+                           <div className="space-y-6">
+                              <div>
+                                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Share Link</label>
+                                 <div className="flex gap-2">
+                                    <input readOnly value={publishLink} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none" />
+                                    <button onClick={handleCopyLink} className="bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition-colors flex items-center gap-2 font-medium">
+                                       {copied ? <Check size={16}/> : <Copy size={16}/>}
+                                       {copied ? "Copied" : "Copy"}
+                                    </button>
+                                 </div>
+                                 <p className="text-xs text-slate-400 mt-2">Anyone with this link can fill out the worksheet.</p>
+                              </div>
+                              
+                              <div className="relative">
+                                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+                                 <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400">OR</span></div>
+                              </div>
+
+                              <div>
+                                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Download File</label>
+                                 <button onClick={handleDownloadFile} className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 font-medium py-3 rounded-lg transition-colors">
+                                    <FileDown size={18} />
+                                    Download .wks file
+                                 </button>
+                                 <p className="text-xs text-slate-400 mt-2">Users can upload this file on the answer page to fill it out.</p>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  )}
+
                 {segments.map((segment, segIdx) => {
                     if (segment.length === 1 && segment[0].type === 'divider') return <div key={segment[0].id} className="h-px bg-slate-200 w-full my-8 break-before-page"></div>;
                     if (segment.length === 0 && segIdx !== 0) return null;
@@ -562,10 +547,13 @@ export const QuestionBoard = () => {
                       </div>
                     );
                 })}
-               </div>
-            )}
+            </div>
         </div>
-        <footer className="fixed bottom-0 left-0 w-full text-center text-slate-400 text-xs py-2 bg-slate-50/80 backdrop-blur-sm border-t border-slate-200 z-40 flex items-center justify-center gap-1 font-sans">made with <Heart size={10} className="text-red-500 fill-red-500" /> (and gemini) by daniel</footer>
+
+        <footer className="fixed bottom-0 left-0 w-full text-center text-slate-400 text-xs py-2 bg-slate-50/80 backdrop-blur-sm border-t border-slate-200 z-40 flex items-center justify-center gap-1 font-sans">
+           made with <Heart size={10} className="text-red-500 fill-red-500" /> (and gemini) by daniel
+        </footer>
+
         {mode === 'edit' && (
            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans w-[95%] md:w-auto max-w-full">
               <div className="bg-white shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex flex-wrap justify-center items-center gap-1 md:gap-2">
@@ -588,7 +576,6 @@ export const QuestionBoard = () => {
                     <TooltipButton icon={Palette} label="Design" active={showSettings} onClick={() => setShowSettings(!showSettings)} />
                     <TooltipButton icon={Eye} label="Preview" onClick={() => setMode('preview')} />
                     <TooltipButton icon={Trash2} label="Clear All" onClick={() => setShowClearConfirm(true)} />
-                    {/* Settings Popover */}
                     {showSettings && (
                        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:absolute md:bottom-full md:left-auto md:right-0 md:translate-x-0 mb-4 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-5 animate-in fade-in zoom-in-95 origin-bottom-right z-[60]">
                           <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800">Design</h3><button onClick={() => setShowSettings(false)}><X size={16} className="text-slate-400 hover:text-slate-600"/></button></div>
@@ -639,8 +626,7 @@ export const QuestionBoard = () => {
            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans w-[95%] md:w-auto max-w-full">
               <div className="bg-white shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex flex-wrap justify-center items-center gap-1">
                  <TooltipButton icon={Edit3} label="Edit Worksheet" onClick={() => setMode('edit')} />
-                 <TooltipButton icon={Share2} label="Share Link" onClick={saveToUrl} />
-                 <TooltipButton icon={Download} label="Download PDF" onClick={handleDownloadPDF} />
+                 <TooltipButton icon={Share2} label="Publish" onClick={() => setShowPublishModal(true)} />
               </div>
            </div>
         )}

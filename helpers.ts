@@ -1,4 +1,3 @@
-
 import { Block, BlockType, GroupBlock, QuestionBlock, QuestionType, TextBlock, WorksheetData } from "./types";
 
 export const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -79,4 +78,14 @@ export const createDragPreview = (label: string) => {
   ghost.style.zIndex = '1000';
   document.body.appendChild(ghost);
   return ghost;
+};
+
+export const downloadFile = (filename: string, content: string, contentType: string) => {
+  const blob = new Blob([content], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 };
