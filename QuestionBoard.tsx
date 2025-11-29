@@ -16,6 +16,7 @@ import {
   Type as TypeIcon, 
   Edit3, 
   Share2, 
+  Download, 
   Heart, 
   AlertTriangle, 
   Pencil,
@@ -252,8 +253,9 @@ export const Builder = () => {
      return '';
   }
 
+  let questionCounter = 0;
   let previewQuestionCounter = 0;
-  
+
   // Publish Actions
   const publishLink = `${window.location.origin}/answer#data=${encodeState(data)}`;
   const handleCopyLink = () => {
@@ -383,8 +385,8 @@ export const Builder = () => {
                                 const globalIndex = data.blocks.indexOf(block);
                                 let label;
                                 if (isQuestion || isGroup) {
-                                  // Note: Editor numbering logic removed to match "Grip" style request, but label calc left for internal logic if needed
-                                  label = (0).toString(); // Placeholder
+                                  questionCounter++;
+                                  label = questionCounter.toString();
                                 }
                                 return (
                                   <EditorBlockWrapper 
@@ -548,7 +550,6 @@ export const Builder = () => {
                 })}
             </div>
         </div>
-
         <footer className="fixed bottom-0 left-0 w-full text-center text-slate-400 text-xs py-2 bg-slate-50/80 backdrop-blur-sm border-t border-slate-200 z-40 flex items-center justify-center gap-1 font-sans">
            made with <Heart size={10} className="text-red-500 fill-red-500" /> (and gemini) by daniel
         </footer>
