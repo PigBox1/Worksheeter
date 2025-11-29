@@ -100,7 +100,6 @@ export const QuestionBoard = () => {
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showSettings, setShowSettings] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'|'inside'} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
