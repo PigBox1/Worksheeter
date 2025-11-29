@@ -15,14 +15,14 @@ import {
   X, 
   Type as TypeIcon, 
   Edit3, 
+  Share2, 
   Heart, 
   AlertTriangle, 
   Pencil,
   Copy,
   Globe,
   FileDown,
-  Check,
-  Share2
+  Check
 } from "lucide-react";
 import { Block, BlockType, DragItem, QuestionType, WorksheetData, GroupBlock, QuestionBlock, TextBlock } from "./types";
 import { createBlock, decodeState, duplicateBlockHelper, encodeState, downloadFile } from "./helpers";
@@ -255,7 +255,6 @@ export const Builder = () => {
   let questionCounter = 0;
   let previewQuestionCounter = 0;
 
-  // Publish Actions
   const publishLink = `${window.location.origin}/answer#data=${encodeState(data)}`;
   const handleCopyLink = () => {
       navigator.clipboard.writeText(publishLink);
