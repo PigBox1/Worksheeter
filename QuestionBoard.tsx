@@ -514,7 +514,7 @@ export const QuestionBoard = () => {
                                             {lbl.replace('.','')}
                                          </div>
                                          <div className="flex-1 space-y-6">
-                                            {g.title && <h3 className="text-xl font-bold text-slate-800 mb-2">{g.title}</h3>}
+                                            {g.title && <h3 className="text-xl font-medium text-slate-800 mb-2">{g.title}</h3>}
                                             <div className="space-y-6 ml-2 md:ml-0">
                                                 {g.children.map((child, cIdx) => {
                                                 const relevantChildren = g.children.slice(0, cIdx + 1).filter(c => c.type === 'question' || c.type === 'group');
@@ -528,6 +528,7 @@ export const QuestionBoard = () => {
                                 }
                                 return null;
                              };
+
                              return <div key={block.id}>{renderPreviewBlock(block, label, 0)}</div>
                           })}
                       </div>
