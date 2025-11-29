@@ -896,7 +896,6 @@ const QuestionBoard = () => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'} | null>(null);
-  const [draggedItem, setDraggedItem] = useState<DragItem | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -917,7 +916,6 @@ const QuestionBoard = () => {
   };
 
   const handleDragEnd = useCallback(() => {
-    setDraggedItem(null);
     setDragTarget(null);
   }, []);
 
@@ -1050,7 +1048,6 @@ const QuestionBoard = () => {
       }
       return { ...prev, blocks: newBlocks };
     });
-    setDraggedItem(null);
     setDragTarget(null);
   }, []);
 
@@ -1339,7 +1336,7 @@ const QuestionBoard = () => {
         </footer>
 
         {mode === 'edit' && (
-           <div className="fixed bottom-14 md:bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans w-[95%] md:w-auto max-w-full">
+           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans w-[95%] md:w-auto max-w-full">
               <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1 md:gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                  <div className="flex gap-1 px-1 flex-shrink-0">
                     <TooltipButton icon={Type} label="Text" onClick={() => addBlock('text')} dragPayload={{type: 'text'}} onDragEnd={handleDragEnd} />
