@@ -100,6 +100,7 @@ export const QuestionBoard = () => {
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showSettings, setShowSettings] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'|'inside'} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -481,7 +482,7 @@ export const QuestionBoard = () => {
                                 if (b.type === 'embed') return <EmbedRenderer url={b.url} title={b.title} />;
                                 if (b.type === 'question') {
                                   previewQuestionCounter++; 
-                                  const qNum = previewQuestionCounter;
+                                  
                                   const q = b as any;
                                   return (
                                       <div className="flex gap-4">
@@ -527,7 +528,6 @@ export const QuestionBoard = () => {
                                 }
                                 return null;
                              };
-
                              return <div key={block.id}>{renderPreviewBlock(block, label, 0)}</div>
                           })}
                       </div>
