@@ -1340,7 +1340,7 @@ const QuestionBoard = () => {
         </footer>
 
         {mode === 'edit' && (
-           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
+           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
               <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1 md:gap-2">
                  <div className="flex gap-1 px-1">
                     <TooltipButton icon={Type} label="Text" onClick={() => addBlock('text')} dragPayload={{type: 'text'}} onDragEnd={handleDragEnd} />
@@ -1412,7 +1412,7 @@ const QuestionBoard = () => {
         )}
 
         {mode === 'preview' && (
-           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
+           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
               <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1">
                  <TooltipButton icon={Edit3} label="Edit Worksheet" onClick={() => setMode('edit')} />
                  <TooltipButton icon={Share2} label="Share Link" onClick={saveToUrl} />
