@@ -114,8 +114,6 @@ const createBlock = (type: BlockType, qType?: QuestionType): Block => {
   const id = generateId();
   if (type === 'question') {
     let defaultPrompt = "New Question";
-    
-    // Relevant defaults based on question type
     switch (qType) {
         case 'multiple-choice': defaultPrompt = "Select the correct option"; break;
         case 'open-answer': defaultPrompt = "Type your answer below"; break;
@@ -169,6 +167,25 @@ const duplicateBlockHelper = (block: Block): Block => {
     return { ...block, id: newId, children: (block as GroupBlock).children.map(duplicateBlockHelper) as (QuestionBlock | TextBlock)[] };
   }
   return { ...block, id: newId };
+};
+
+const createDragPreview = (label: string) => {
+  const ghost = document.createElement('div');
+  ghost.textContent = label;
+  ghost.style.position = 'absolute';
+  ghost.style.top = '-1000px';
+  ghost.style.background = 'white';
+  ghost.style.padding = '10px 16px';
+  ghost.style.borderRadius = '8px';
+  ghost.style.border = '1px solid #cbd5e1';
+  ghost.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+  ghost.style.fontFamily = 'sans-serif';
+  ghost.style.fontWeight = '600';
+  ghost.style.fontSize = '14px';
+  ghost.style.color = '#334155';
+  ghost.style.zIndex = '1000';
+  document.body.appendChild(ghost);
+  return ghost;
 };
 
 // --- CSS Variable Generator ---
@@ -225,6 +242,11 @@ const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload
     };
     e.dataTransfer.setData("dragData", JSON.stringify(dragData));
     e.dataTransfer.effectAllowed = "all"; 
+    
+    // Create custom ghost image
+    const ghost = createDragPreview(label);
+    e.dataTransfer.setDragImage(ghost, 0, 0);
+    setTimeout(() => document.body.removeChild(ghost), 0);
   };
 
   return (
@@ -538,9 +560,10 @@ interface EditorBlockWrapperProps {
   dragTarget?: { id: string, pos: 'top' | 'bottom' } | null;
   setDragTarget?: (t: { id: string, pos: 'top' | 'bottom' } | null) => void;
   onDragEnd: () => void;
+  isDraggingItem: boolean;
 }
 
-const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, removeBlock, duplicateBlock, handleDrop, dragTarget, setDragTarget, onDragEnd }: EditorBlockWrapperProps) => {
+const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, removeBlock, duplicateBlock, handleDrop, dragTarget, setDragTarget, onDragEnd, isDraggingItem }: EditorBlockWrapperProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const [draggedOptionIdx, setDraggedOptionIdx] = useState<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -872,7 +895,7 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
              <div className={`space-y-0`}>
                 {block.children.map((child, childIdx) => {
                    const childLabel = label ? `${label}${String.fromCharCode(97 + childIdx)}` : undefined;
-                   return <EditorBlockWrapper key={child.id} block={child} index={childIdx} parentId={block.id} label={childLabel} updateBlock={updateBlock} removeBlock={removeBlock} duplicateBlock={duplicateBlock} handleDrop={handleDrop} onDragEnd={onDragEnd} />
+                   return <EditorBlockWrapper key={child.id} block={child} index={childIdx} parentId={block.id} label={childLabel} updateBlock={updateBlock} removeBlock={removeBlock} duplicateBlock={duplicateBlock} handleDrop={handleDrop} onDragEnd={onDragEnd} isDraggingItem={isDraggingItem} />
                 })}
              </div>
              {block.children.length === 0 && <div className={`text-center py-8 text-[var(--primary-300)] text-sm border-2 border-dashed border-[var(--primary-100)] rounded-lg`}>Drag questions here</div>}
@@ -896,6 +919,7 @@ const QuestionBoard = () => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'} | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -917,6 +941,7 @@ const QuestionBoard = () => {
 
   const handleDragEnd = useCallback(() => {
     setDragTarget(null);
+    setIsDragging(false);
   }, []);
 
   const updateBlock = useCallback((id: string, parentId: string | undefined, newData: Block) => {
@@ -1049,6 +1074,7 @@ const QuestionBoard = () => {
       return { ...prev, blocks: newBlocks };
     });
     setDragTarget(null);
+    setIsDragging(false);
   }, []);
 
   const segments = React.useMemo(() => {
@@ -1134,25 +1160,36 @@ const QuestionBoard = () => {
                     
                     if (isDividerSegment) {
                        return (
-                          <div key={segment[0].id} className="group relative h-16 flex items-center justify-center my-4 cursor-grab"
-                             draggable
-                             onDragStart={(e) => { e.dataTransfer.setData("dragData", JSON.stringify({ id: segment[0].id, index: 0, type: 'block' })); }}
-                             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; e.currentTarget.classList.add('bg-blue-50/50'); }}
-                             onDragLeave={(e) => { e.currentTarget.classList.remove('bg-blue-50/50'); }}
-                             onDrop={(e) => {
-                                e.currentTarget.classList.remove('bg-blue-50/50');
-                                const insertIndex = segments.slice(0, segIdx+1).reduce((acc, s) => acc + s.length, 0);
-                                handleDragDrop(e, undefined, undefined, insertIndex);
-                             }}
-                             onDragEnd={handleDragEnd}
-                          >
-                             <div className="absolute bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full border border-slate-200 flex items-center gap-2 z-10 font-sans group-hover:scale-110 transition-transform">
-                                <Divide size={12} /> Page Break
+                          <div key={segment[0].id} className="relative py-2">
+                             {/* The Visual Page Break */}
+                             <div className="group relative h-10 flex items-center justify-center cursor-grab"
+                                draggable
+                                onDragStart={(e) => { 
+                                   e.dataTransfer.setData("dragData", JSON.stringify({ id: segment[0].id, index: 0, type: 'block' })); 
+                                   setIsDragging(true);
+                                }}
+                                onDragEnd={handleDragEnd}
+                             >
+                                <div className="absolute bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full border border-slate-200 flex items-center gap-2 z-10 font-sans group-hover:scale-110 transition-transform">
+                                   <Divide size={12} /> Page Break
+                                </div>
+                                <div className="w-full h-px bg-slate-300 border-dashed border-t border-slate-300"></div>
+                                <button onClick={() => removeBlock(segment[0].id, undefined)} className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 bg-white rounded-full shadow border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                   <X size={14}/>
+                                </button>
                              </div>
-                             <div className="w-full h-px bg-slate-300 border-dashed border-t border-slate-300"></div>
-                             <button onClick={() => removeBlock(segment[0].id, undefined)} className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 bg-white rounded-full shadow border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                                <X size={14}/>
-                             </button>
+
+                             {/* Dedicated Drop Zone AFTER Page Break */}
+                             <div 
+                                className={`transition-all duration-200 ease-in-out border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-lg flex items-center justify-center text-blue-400 text-sm font-medium ${isDragging ? 'h-24 opacity-100 mt-4' : 'h-0 opacity-0 mt-0 border-0 overflow-hidden'}`}
+                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                onDrop={(e) => {
+                                   const globalIndex = data.blocks.findIndex(b => b.id === segment[0].id);
+                                   handleDragDrop(e, undefined, undefined, globalIndex + 1);
+                                }}
+                             >
+                                Drop to start new page
+                             </div>
                           </div>
                        )
                     }
@@ -1160,7 +1197,7 @@ const QuestionBoard = () => {
                     if (segment.length === 0 && segIdx !== 0) return null;
 
                     return (
-                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative">
+                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative transition-all duration-300">
                           {segIdx === 0 && (
                             <div className={`space-y-4 pt-4 ${segment.length > 0 ? 'mb-12 border-b border-slate-100 pb-10' : ''}`}>
                               <input 
@@ -1188,11 +1225,11 @@ const QuestionBoard = () => {
                                 const isTop = (e.clientY - rect.top) < (rect.height / 2);
                                 
                                 if (segment.length > 0) {
-                                    // If we drop on the container background, infer intent based on position
                                     if (isTop) {
                                         handleDragDrop(e, undefined, undefined, segmentStartIndex);
                                     } else {
-                                        handleDragDrop(e, segment[segment.length-1].id); // Append to end
+                                        // Append to end of this segment (which is correct for "inside" drops)
+                                        handleDragDrop(e, segment[segment.length-1].id); 
                                     }
                                 } else {
                                     handleDragDrop(e, undefined, undefined, segmentStartIndex);
@@ -1222,14 +1259,15 @@ const QuestionBoard = () => {
                                     dragTarget={dragTarget}
                                     setDragTarget={setDragTarget}
                                     onDragEnd={handleDragEnd}
+                                    isDraggingItem={isDragging}
                                   />
                                 );
                              })}
                           </div>
                           
-                          {/* Dedicated Drop Zone at End of Container */}
+                          {/* Dedicated Drop Zone at End of Container - Hidden by default */}
                           <div 
-                             className="h-16 mt-4 -mb-12 border-2 border-transparent hover:border-blue-300 hover:bg-blue-50/50 rounded-lg transition-all flex items-center justify-center text-blue-300 opacity-0 hover:opacity-100 text-sm font-medium border-dashed"
+                             className={`transition-all duration-200 ease-in-out border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-lg flex items-center justify-center text-blue-400 text-sm font-medium ${isDragging ? 'h-24 opacity-100 mt-4' : 'h-0 opacity-0 mt-0 border-0 overflow-hidden'}`}
                              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                              onDrop={(e) => {
                                 const insertIndex = segments.slice(0, segIdx+1).reduce((acc, s) => acc + s.length, 0);
