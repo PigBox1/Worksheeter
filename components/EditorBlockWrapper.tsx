@@ -4,16 +4,12 @@ import {
   ImageIcon, 
   FileText, 
   CheckSquare, 
-  HelpCircle, 
   Copy, 
-  Trash2, 
   X, 
-  Type, 
-  Video, 
   Info, 
   Plus 
 } from "lucide-react";
-import { Block, DragItem, QuestionBlock, GroupBlock, TextBlock, BlockType } from "../types";
+import { Block, DragItem, QuestionBlock, GroupBlock, BlockType } from "../types";
 import { EmbedRenderer } from "./UIComponents";
 
 interface EditorBlockWrapperProps {
@@ -35,8 +31,7 @@ interface EditorBlockWrapperProps {
   onBlockDragStart: (type: BlockType) => void;
 }
 
-export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, removeBlock, duplicateBlock, handleDrop, dragTarget, setDragTarget, onDragEnd, isDraggingItem, depth = 0, getNumbering, draggedType, onBlockDragStart }: EditorBlockWrapperProps) => {
-  const [isFocused, setIsFocused] = useState(false);
+export const EditorBlockWrapper = ({ block, index, parentId, updateBlock, removeBlock, duplicateBlock, handleDrop, dragTarget, setDragTarget, onDragEnd, isDraggingItem, depth = 0, getNumbering, draggedType, onBlockDragStart }: EditorBlockWrapperProps) => {
   const [draggedOptionIdx, setDraggedOptionIdx] = useState<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   
@@ -61,7 +56,6 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
       const isTop = e.clientY < rect.top + 20; 
       const isBottom = e.clientY > rect.bottom - 20;
       
-      // Limit max indentation to 2 (Root -> Indent 1). So depth 0 can accept inside, depth 1 cannot.
       if (block.type === 'group' && !isTop && !isBottom && e.clientY < rect.top + 80 && depth < 1) {
          setDragTarget({ id: block.id, pos: 'inside' });
       } else {
@@ -109,23 +103,15 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
     setDraggedOptionIdx(null);
   };
 
-  const showHelper = block.type === 'question' && ['cloze-text', 'cloze-dropdown', 'drag-inline'].includes((block as QuestionBlock).qType);
-
-  const isGroupBlock = block.type === 'group';
   const isGroupDrag = draggedType === 'group';
   const isDividerDrag = draggedType === 'divider';
-  // Max depth allowed is 1 (Root -> Level 1). Level 2 is disabled.
   const isMaxDepth = depth >= 1;
-  
-  // Constraints: No groups dropping into max depth, no dividers in groups
   const canDropInGroup = !(isGroupDrag && isMaxDepth) && !isDividerDrag;
 
   return (
     <div 
       ref={wrapperRef}
-      className={`group relative flex px-0 py-3 border-b border-slate-100 last:border-0 ${isFocused ? `bg-[var(--primary-50)]/30 -mx-4 px-4 rounded-xl` : ''}`}
-      onFocus={() => setIsFocused(true)}
-      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false); }}
+      className="group relative flex px-0 py-3 border-b border-slate-100 last:border-0"
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
@@ -217,14 +203,10 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
         )}
         {block.type === 'group' && (
           <div className={`bg-[var(--primary-50)]/30 rounded-xl p-6 border border-dashed ${dragTarget?.id === block.id && dragTarget.pos === 'inside' ? 'border-[var(--primary)] bg-[var(--primary-100)]/50' : 'border-[var(--primary-200)]'} min-h-[150px] relative`}>
-             <div className="mb-6 flex gap-2 items-center">
-                {/* Fixed: Use font-medium to match question size, remove bigger text */}
-                <input className={`w-full bg-transparent font-medium text-lg text-[var(--primary-900)] outline-none placeholder-[var(--primary-300)]`} placeholder="Group Title..." value={block.title || ''} onChange={(e) => updateBlock(block.id, parentId, { ...block, title: e.target.value })} />
-             </div>
+             <div className="mb-6 flex gap-2 items-center"><input className={`w-full bg-transparent font-medium text-lg text-[var(--primary-900)] outline-none placeholder-[var(--primary-300)]`} placeholder="Group Title..." value={block.title || ''} onChange={(e) => updateBlock(block.id, parentId, { ...block, title: e.target.value })} /></div>
              <div className={`space-y-0`}>
                 {(block as GroupBlock).children.map((child, childIdx) => {
                    const relevantChildren = (block as GroupBlock).children.slice(0, childIdx + 1).filter(c => c.type === 'question' || c.type === 'group');
-                   // Fix numbering: use childIdx logic or passed getNumbering
                    const childLabel = (child.type === 'question' || child.type === 'group') ? getNumbering!(depth + 1, relevantChildren.length - 1) : undefined;
 
                    return (
@@ -251,7 +233,6 @@ export const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock,
                 })}
              </div>
              
-             {/* Drop Zone inside Group */}
              {((block as GroupBlock).children.length === 0 || isDraggingItem) && depth < 1 && (
                  <div 
                     className={`h-16 mt-4 border-2 border-dashed rounded-lg flex items-center justify-center text-xs font-medium transition-all

@@ -18,13 +18,11 @@ import {
   Share2, 
   Download, 
   Heart, 
-  AlertTriangle, 
-  Pencil,
-  Copy
+  AlertTriangle
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { Block, BlockType, DragItem, QuestionType, WorksheetData, GroupBlock, QuestionBlock, TextBlock } from "./types";
+import { Block, BlockType, DragItem, QuestionType, WorksheetData, GroupBlock } from "./types";
 import { createBlock, decodeState, duplicateBlockHelper, encodeState } from "./helpers";
 import { ThemeContext } from "./ThemeContext";
 import { ThemeStyle, TooltipButton, SimpleMarkdown, EmbedRenderer } from "./components/UIComponents";
@@ -282,7 +280,6 @@ export const QuestionBoard = () => {
     }, 500);
   };
 
-  const presetColors = ['#64748b', '#ef4444', '#f97316', '#f59e0b', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#d946ef', '#ec4899'];
   
   const getNumbering = (depth: number, index: number) => {
      if (depth === 0) return `${index + 1}.`;
@@ -291,8 +288,7 @@ export const QuestionBoard = () => {
      return '';
   }
 
-  // Counters
-  let questionCounter = 0;
+  // Preview Counter Helper
   let previewQuestionCounter = 0;
 
   return (
@@ -368,7 +364,7 @@ export const QuestionBoard = () => {
                     if (segment.length === 0 && segIdx !== 0) return null;
 
                     return (
-                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative transition-all duration-300">
+                       <div key={segIdx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible min-h-[200px] p-8 pb-16 relative">
                           {segIdx === 0 && (
                             <div className={`space-y-4 pt-4 ${segment.length > 0 ? 'mb-12 border-b border-slate-100 pb-10' : ''}`}>
                               <input 
@@ -474,7 +470,6 @@ export const QuestionBoard = () => {
                           )}
 
                           {segment.map((block) => {
-                             // Calculate numbering for root items
                              const globalIndex = data.blocks.findIndex(b => b.id === block.id);
                              const relevantBlocks = data.blocks.slice(0, globalIndex + 1).filter(b => b.type === 'question' || b.type === 'group');
                              const label = (block.type === 'question' || block.type === 'group') ? getNumbering(0, relevantBlocks.length - 1) : '';
@@ -483,7 +478,9 @@ export const QuestionBoard = () => {
                                 if (b.type === 'text') return <SimpleMarkdown text={b.content} />;
                                 if (b.type === 'embed') return <EmbedRenderer url={b.url} title={b.title} />;
                                 if (b.type === 'question') {
-                                  const q = b as any; 
+                                  previewQuestionCounter++; 
+                                  const qNum = previewQuestionCounter;
+                                  const q = b as any;
                                   return (
                                       <div className="flex gap-4">
                                         <div className={`flex-shrink-0 w-8 h-8 rounded-lg ${depth === 0 ? 'bg-[var(--primary-100)] text-[var(--primary-700)]' : 'bg-slate-100 text-slate-600'} font-bold flex items-center justify-center text-sm select-none font-sans`}>
