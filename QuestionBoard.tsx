@@ -18,7 +18,8 @@ import {
   Share2, 
   Download, 
   Heart, 
-  AlertTriangle
+  AlertTriangle,
+  Pencil
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -100,6 +101,7 @@ export const QuestionBoard = () => {
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showSettings, setShowSettings] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'|'inside'} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -255,10 +257,36 @@ export const QuestionBoard = () => {
 
   const handleDownloadPDF = async () => {
     setMode('preview');
+    
+    // Need a moment for render to stabilize if switching modes
     setTimeout(async () => {
       const element = document.getElementById('preview-container');
       if (!element) return;
-      const canvas = await html2canvas(element, { scale: 2 });
+
+      // Clone the node to modify styles for PDF without affecting UI
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.width = '794px'; // A4 width at 96 DPI (approx)
+      clone.style.padding = '40px';
+      
+      // Remove container styles from the clone to look like "print"
+      // We target the bg-white, rounded, shadow divs
+      const containers = clone.querySelectorAll('.bg-white.rounded-xl.shadow-sm');
+      containers.forEach((c) => {
+          const el = c as HTMLElement;
+          el.style.boxShadow = 'none';
+          el.style.borderRadius = '0';
+          el.style.border = 'none';
+          el.style.backgroundColor = 'transparent';
+          el.style.padding = '0';
+          el.style.marginBottom = '20px';
+      });
+
+      // Temporarily append to body to capture
+      document.body.appendChild(clone);
+      
+      const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      document.body.removeChild(clone); // Clean up
+
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgProps = pdf.getImageProperties(imgData);
@@ -267,6 +295,7 @@ export const QuestionBoard = () => {
       let heightLeft = pdfHeight;
       let position = 0;
       const pageHeight = pdf.internal.pageSize.getHeight();
+      
       pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
       heightLeft -= pageHeight;
       while (heightLeft >= 0) {
@@ -559,16 +588,53 @@ export const QuestionBoard = () => {
                     <TooltipButton icon={Palette} label="Design" active={showSettings} onClick={() => setShowSettings(!showSettings)} />
                     <TooltipButton icon={Eye} label="Preview" onClick={() => setMode('preview')} />
                     <TooltipButton icon={Trash2} label="Clear All" onClick={() => setShowClearConfirm(true)} />
+                    {/* Settings Popover */}
                     {showSettings && (
                        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:absolute md:bottom-full md:left-auto md:right-0 md:translate-x-0 mb-4 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-5 animate-in fade-in zoom-in-95 origin-bottom-right z-[60]">
                           <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800">Design</h3><button onClick={() => setShowSettings(false)}><X size={16} className="text-slate-400 hover:text-slate-600"/></button></div>
-                          <div className="space-y-6"><div><label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><Palette size={12}/> Accent Color</label><div className="flex flex-wrap gap-2">{presetColors.map(c => (<button key={c} onClick={() => setData(prev => ({...prev, design: {...prev.design!, accentColor: c}}))} className={`w-8 h-8 rounded-full border-2 ${data.design?.accentColor === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-110'} transition-transform shadow-sm`} style={{backgroundColor: c}} />))}</div></div><div><label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><TypeIcon size={12}/> Typography</label><div className="flex bg-slate-100 p-1 rounded-lg">{['sans', 'serif', 'mono'].map(f => (<button key={f} onClick={() => setData(prev => ({...prev, design: {...prev.design!, font: f as any}}))} className={`flex-1 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${data.design?.font === f ? `bg-white text-slate-900 shadow-sm` : 'text-slate-500 hover:text-slate-700'}`}>{f}</button>))}</div></div></div>
+                          <div className="space-y-6">
+                             <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><Palette size={12}/> Accent Color</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {presetColors.map(c => (
+                                        <button key={c} onClick={() => setData(prev => ({...prev, design: {...prev.design!, accentColor: c}}))} className={`w-8 h-8 rounded-full border-2 ${data.design?.accentColor === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-110'} transition-transform shadow-sm`} style={{backgroundColor: c}} />
+                                    ))}
+                                    <div className="relative">
+                                       <button onClick={() => setShowColorPicker(!showColorPicker)} className={`w-8 h-8 rounded-full border-2 flex items-center justify-center bg-white ${!presetColors.includes(data.design?.accentColor || '') ? 'border-slate-800' : 'border-slate-200'} hover:border-slate-400 transition-colors shadow-sm`} style={!presetColors.includes(data.design?.accentColor || '') ? {backgroundColor: data.design?.accentColor} : {}}>
+                                          <Pencil size={12} className={!presetColors.includes(data.design?.accentColor || '') ? 'text-white mix-blend-difference' : 'text-slate-400'}/>
+                                       </button>
+                                       {showColorPicker && (
+                                          <div className="absolute bottom-full right-0 mb-2 p-3 bg-white shadow-xl border border-slate-200 rounded-xl z-[60] flex flex-col gap-3 w-48 animate-in slide-in-from-bottom-2">
+                                              <div className="flex gap-2 items-center">
+                                                  <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                                                      <input type="color" className="w-full h-full p-0 border-0 cursor-pointer scale-150" value={data.design?.accentColor} onChange={(e) => setData(prev => ({...prev, design: {...prev.design!, accentColor: e.target.value}}))} />
+                                                  </div>
+                                                  <input type="text" className="w-full text-xs font-mono border border-slate-200 rounded px-2 py-1 uppercase bg-white text-slate-900" value={data.design?.accentColor} onChange={(e) => setData(prev => ({...prev, design: {...prev.design!, accentColor: e.target.value}}))} />
+                                              </div>
+                                              <div className="text-xs text-slate-400 text-center">Hex or RGB</div>
+                                          </div>
+                                       )}
+                                    </div>
+                                </div>
+                             </div>
+                             <div>
+                                <label className="text-xs font-bold text-slate-400 uppercase mb-3 block flex gap-2"><TypeIcon size={12}/> Typography</label>
+                                <div className="flex bg-slate-100 p-1 rounded-lg">
+                                    {['sans', 'serif', 'mono'].map(f => (
+                                       <button key={f} onClick={() => setData(prev => ({...prev, design: {...prev.design!, font: f as any}}))} className={`flex-1 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${data.design?.font === f ? `bg-white text-slate-900 shadow-sm` : 'text-slate-500 hover:text-slate-700'}`}>{f}</button>
+                                    ))}
+                                 </div>
+                             </div>
+                             <hr className="border-slate-100"/>
+                             <p className="text-xs text-center text-slate-400">Settings saved automatically</p>
+                          </div>
                        </div>
                     )}
                  </div>
               </div>
            </div>
         )}
+
         {mode === 'preview' && (
            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans w-[95%] md:w-auto max-w-full">
               <div className="bg-white shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex flex-wrap justify-center items-center gap-1">
@@ -578,6 +644,7 @@ export const QuestionBoard = () => {
               </div>
            </div>
         )}
+
       </div>
     </ThemeContext.Provider>
   );
