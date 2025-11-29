@@ -8,7 +8,7 @@ const colorMix = (color1: string, color2: string, weight: number) => {
   const hexToRgb = (hex: string) => {
     // Expand shorthand form (e.g. "03F") to full form (e.g. "0033FF")
     const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    hex = hex.replace(shorthandRegex, function(m, r, g, b) {
+    hex = hex.replace(shorthandRegex, function(_m, r, g, b) {
       return r + r + g + g + b + b;
     });
 
