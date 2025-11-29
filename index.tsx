@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useContext } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
@@ -114,24 +114,33 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 const createBlock = (type: BlockType, qType?: QuestionType): Block => {
   const id = generateId();
   if (type === 'question') {
-    const isComplex = qType === 'cloze-text' || qType === 'cloze-dropdown' || qType === 'drag-inline';
+    let defaultPrompt = "New Question";
     
+    // Relevant defaults based on question type
+    switch (qType) {
+        case 'multiple-choice': defaultPrompt = "Select the correct option"; break;
+        case 'open-answer': defaultPrompt = "Type your answer below"; break;
+        case 'cloze-text': defaultPrompt = "Fill in the missing words"; break;
+        case 'cloze-dropdown': defaultPrompt = "Select the correct options"; break;
+        case 'drag-inline': defaultPrompt = "Drag and drop the words"; break;
+    }
+
     return { 
       id, 
       type: 'question', 
       qType: qType!, 
-      prompt: isComplex ? 'Complete the sentences:' : 'New Question', 
+      prompt: defaultPrompt, 
       listItems: qType === 'cloze-text' ? ['The capital of France is [Paris].'] : 
                  qType === 'cloze-dropdown' ? ['The sky is [blue|green|red].'] : 
                  qType === 'drag-inline' ? ['The [cat] sat on the [mat].'] : undefined,
       options: qType === 'multiple-choice' ? ['Option 1', 'Option 2'] : undefined 
     };
   } else if (type === 'text') {
-    return { id, type: 'text', content: 'Write some **markdown** text here...' };
+    return { id, type: 'text', content: '### Instructions\n\nEnter your text instructions here...' };
   } else if (type === 'group') {
-    return { id, type: 'group', title: 'Question Group', children: [] };
+    return { id, type: 'group', title: 'New Group', children: [] };
   } else if (type === 'embed') {
-    return { id, type: 'embed', url: '' };
+    return { id, type: 'embed', url: '', title: 'Video Resource' };
   } else {
     return { id, type: 'divider' };
   }
@@ -205,9 +214,10 @@ interface TooltipButtonProps {
   className?: string;
   dragPayload?: { type: BlockType, qType?: QuestionType };
   active?: boolean;
+  onDragEnd?: () => void;
 }
 
-const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload, active }: TooltipButtonProps) => {
+const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload, active, onDragEnd }: TooltipButtonProps) => {
   const handleDragStart = (e: React.DragEvent) => {
     if (!dragPayload) return;
     const dragData: DragItem = { 
@@ -224,6 +234,7 @@ const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload
         onClick={onClick}
         draggable={!!dragPayload}
         onDragStart={handleDragStart}
+        onDragEnd={onDragEnd}
         className={`p-2.5 rounded-xl transition-all ${active ? 'bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'} cursor-grab active:cursor-grabbing ${className}`}
       >
         <Icon size={20} strokeWidth={active ? 2.5 : 2} />
@@ -527,9 +538,10 @@ interface EditorBlockWrapperProps {
   handleDrop: (e: React.DragEvent, targetId?: string, targetParentId?: string, targetIndex?: number) => void;
   dragTarget?: { id: string, pos: 'top' | 'bottom' } | null;
   setDragTarget?: (t: { id: string, pos: 'top' | 'bottom' } | null) => void;
+  onDragEnd: () => void;
 }
 
-const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, removeBlock, duplicateBlock, handleDrop, dragTarget, setDragTarget }: EditorBlockWrapperProps) => {
+const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, removeBlock, duplicateBlock, handleDrop, dragTarget, setDragTarget, onDragEnd }: EditorBlockWrapperProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const [draggedOptionIdx, setDraggedOptionIdx] = useState<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -624,6 +636,7 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
             <div 
               draggable
               onDragStart={onBadgeDragStart}
+              onDragEnd={onDragEnd}
               className="cursor-grab active:cursor-grabbing flex items-center justify-center text-slate-300 hover:text-slate-600 p-1 rounded hover:bg-slate-100 transition-colors"
             >
               <GripVertical size={20} />
@@ -683,7 +696,6 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
       <div className="flex-1 pl-2 relative">
         {block.type === 'text' && (
           <div className="flex gap-2">
-            <div className="mt-1"><Type size={14} className="text-slate-300"/></div>
             <textarea
               className="w-full resize-none outline-none text-slate-700 bg-transparent placeholder-slate-300 font-normal"
               placeholder="Type text..."
@@ -697,7 +709,6 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
         {block.type === 'embed' && (
           <div>
              <div className="flex items-center gap-2 mb-2">
-                <div className="bg-slate-100 p-1 rounded text-slate-400"><Video size={14}/></div>
                 <input 
                   className="bg-transparent font-medium outline-none text-slate-800 placeholder-slate-300 w-full"
                   placeholder="Video/Embed Title"
@@ -857,13 +868,12 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
             onDrop={(e) => { e.currentTarget.classList.remove(`bg-[var(--primary-100)]/50`); const dataStr = e.dataTransfer.getData("dragData"); if(!dataStr) return; const dragItem: DragItem = JSON.parse(dataStr); if (dragItem.id === block.id) return; handleDrop(e, undefined, block.id, (block as GroupBlock).children.length); }}
           >
              <div className="mb-6 flex gap-2 items-center">
-                <Heading size={18} className="text-[var(--primary)] opacity-50"/>
                 <input className={`w-full bg-transparent font-bold text-lg text-[var(--primary-900)] outline-none placeholder-[var(--primary-300)]`} placeholder="Group Title..." value={block.title || ''} onChange={(e) => updateBlock(block.id, parentId, { ...block, title: e.target.value })} />
              </div>
              <div className={`space-y-0`}>
                 {block.children.map((child, childIdx) => {
                    const childLabel = label ? `${label}${String.fromCharCode(97 + childIdx)}` : undefined;
-                   return <EditorBlockWrapper key={child.id} block={child} index={childIdx} parentId={block.id} label={childLabel} updateBlock={updateBlock} removeBlock={removeBlock} duplicateBlock={duplicateBlock} handleDrop={handleDrop} />
+                   return <EditorBlockWrapper key={child.id} block={child} index={childIdx} parentId={block.id} label={childLabel} updateBlock={updateBlock} removeBlock={removeBlock} duplicateBlock={duplicateBlock} handleDrop={handleDrop} onDragEnd={onDragEnd} />
                 })}
              </div>
              {block.children.length === 0 && <div className={`text-center py-8 text-[var(--primary-300)] text-sm border-2 border-dashed border-[var(--primary-100)] rounded-lg`}>Drag questions here</div>}
@@ -887,6 +897,7 @@ const QuestionBoard = () => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [dragTarget, setDragTarget] = useState<{id: string, pos: 'top'|'bottom'} | null>(null);
+  const [draggedItem, setDraggedItem] = useState<DragItem | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -905,6 +916,11 @@ const QuestionBoard = () => {
     navigator.clipboard.writeText(window.location.href);
     alert("Link copied to clipboard!");
   };
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedItem(null);
+    setDragTarget(null);
+  }, []);
 
   const updateBlock = useCallback((id: string, parentId: string | undefined, newData: Block) => {
     setData(prev => {
@@ -1035,6 +1051,8 @@ const QuestionBoard = () => {
       }
       return { ...prev, blocks: newBlocks };
     });
+    setDraggedItem(null);
+    setDragTarget(null);
   }, []);
 
   const segments = React.useMemo(() => {
@@ -1130,6 +1148,7 @@ const QuestionBoard = () => {
                                 const insertIndex = segments.slice(0, segIdx+1).reduce((acc, s) => acc + s.length, 0);
                                 handleDragDrop(e, undefined, undefined, insertIndex);
                              }}
+                             onDragEnd={handleDragEnd}
                           >
                              <div className="absolute bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full border border-slate-200 flex items-center gap-2 z-10 font-sans group-hover:scale-110 transition-transform">
                                 <Divide size={12} /> Page Break
@@ -1167,18 +1186,28 @@ const QuestionBoard = () => {
                              className={`${segment.length === 0 && segIdx !== 0 ? 'min-h-[100px] flex items-center justify-center border-2 border-dashed border-slate-100 rounded-lg bg-slate-50' : ''}`}
                              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
                              onDrop={(e) => {
+                                // Smart Container Drop Logic
+                                const segmentStartIndex = segments.slice(0, segIdx).reduce((acc, s) => acc + s.length, 0);
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const isTop = (e.clientY - rect.top) < (rect.height / 2);
+                                
                                 if (segment.length > 0) {
-                                    handleDragDrop(e, segment[segment.length-1].id);
+                                    // If we drop on the container background, infer intent based on position
+                                    if (isTop) {
+                                        handleDragDrop(e, undefined, undefined, segmentStartIndex);
+                                    } else {
+                                        handleDragDrop(e, segment[segment.length-1].id); // Append to end
+                                    }
                                 } else {
-                                    const insertIndex = segments.slice(0, segIdx).reduce((acc, s) => acc + s.length, 0);
-                                    handleDragDrop(e, undefined, undefined, insertIndex);
+                                    handleDragDrop(e, undefined, undefined, segmentStartIndex);
                                 }
                              }}
                           >
                              {segment.length === 0 && segIdx !== 0 && ( <div className="text-center text-slate-400"><p>Empty Page</p></div> )}
-                             {segment.map((block, index) => {
+                             {segment.map((block) => {
                                 const isQuestion = block.type === 'question';
                                 const isGroup = block.type === 'group';
+                                const globalIndex = data.blocks.indexOf(block);
                                 let label;
                                 if (isQuestion || isGroup) {
                                   questionCounter++;
@@ -1188,7 +1217,7 @@ const QuestionBoard = () => {
                                   <EditorBlockWrapper 
                                     key={block.id} 
                                     block={block} 
-                                    index={index} 
+                                    index={globalIndex} 
                                     updateBlock={updateBlock} 
                                     removeBlock={removeBlock}
                                     duplicateBlock={duplicateBlock}
@@ -1196,6 +1225,7 @@ const QuestionBoard = () => {
                                     label={label}
                                     dragTarget={dragTarget}
                                     setDragTarget={setDragTarget}
+                                    onDragEnd={handleDragEnd}
                                   />
                                 );
                              })}
@@ -1304,26 +1334,27 @@ const QuestionBoard = () => {
             )}
         </div>
 
-        <footer className="mt-12 mb-8 text-center text-slate-400 text-sm flex items-center justify-center gap-1 font-sans opacity-70 hover:opacity-100 transition-opacity">
-           made with <Heart size={14} className="text-red-500 fill-red-500" /> (and gemini) by daniel
+        {/* Footer Fixed to Bottom */}
+        <footer className="fixed bottom-0 left-0 w-full text-center text-slate-400 text-xs py-2 bg-slate-50/80 backdrop-blur-sm border-t border-slate-200 z-40 flex items-center justify-center gap-1 font-sans">
+           made with <Heart size={10} className="text-red-500 fill-red-500" /> (and gemini) by daniel
         </footer>
 
         {mode === 'edit' && (
-           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
+           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
               <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1 md:gap-2">
                  <div className="flex gap-1 px-1">
-                    <TooltipButton icon={Type} label="Text" onClick={() => addBlock('text')} dragPayload={{type: 'text'}} />
-                    <TooltipButton icon={Heading} label="Group" onClick={() => addBlock('group')} dragPayload={{type: 'group'}} />
-                    <TooltipButton icon={LinkIcon} label="Embed" onClick={() => addBlock('embed')} dragPayload={{type: 'embed'}} />
-                    <TooltipButton icon={Divide} label="Break" onClick={() => addBlock('divider')} dragPayload={{type: 'divider'}} />
+                    <TooltipButton icon={Type} label="Text" onClick={() => addBlock('text')} dragPayload={{type: 'text'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={Heading} label="Group" onClick={() => addBlock('group')} dragPayload={{type: 'group'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={LinkIcon} label="Embed" onClick={() => addBlock('embed')} dragPayload={{type: 'embed'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={Divide} label="Break" onClick={() => addBlock('divider')} dragPayload={{type: 'divider'}} onDragEnd={handleDragEnd} />
                  </div>
                  <div className="w-px h-8 bg-slate-200 mx-1"></div>
                  <div className="flex gap-1 px-1">
-                    <TooltipButton icon={ImageIcon} label="Multiple Choice" onClick={() => addBlock('question', 'multiple-choice')} dragPayload={{type: 'question', qType: 'multiple-choice'}} />
-                    <TooltipButton icon={TextCursorInput} label="Cloze (Text)" onClick={() => addBlock('question', 'cloze-text')} dragPayload={{type: 'question', qType: 'cloze-text'}} />
-                    <TooltipButton icon={ListOrdered} label="Cloze (Drop)" onClick={() => addBlock('question', 'cloze-dropdown')} dragPayload={{type: 'question', qType: 'cloze-dropdown'}} />
-                    <TooltipButton icon={MousePointerClick} label="Drag & Drop" onClick={() => addBlock('question', 'drag-inline')} dragPayload={{type: 'question', qType: 'drag-inline'}} />
-                    <TooltipButton icon={MessageSquare} label="Open Answer" onClick={() => addBlock('question', 'open-answer')} dragPayload={{type: 'question', qType: 'open-answer'}} />
+                    <TooltipButton icon={ImageIcon} label="Multiple Choice" onClick={() => addBlock('question', 'multiple-choice')} dragPayload={{type: 'question', qType: 'multiple-choice'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={TextCursorInput} label="Cloze (Text)" onClick={() => addBlock('question', 'cloze-text')} dragPayload={{type: 'question', qType: 'cloze-text'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={ListOrdered} label="Cloze (Drop)" onClick={() => addBlock('question', 'cloze-dropdown')} dragPayload={{type: 'question', qType: 'cloze-dropdown'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={MousePointerClick} label="Drag & Drop" onClick={() => addBlock('question', 'drag-inline')} dragPayload={{type: 'question', qType: 'drag-inline'}} onDragEnd={handleDragEnd} />
+                    <TooltipButton icon={MessageSquare} label="Open Answer" onClick={() => addBlock('question', 'open-answer')} dragPayload={{type: 'question', qType: 'open-answer'}} onDragEnd={handleDragEnd} />
                  </div>
                  <div className="w-px h-8 bg-slate-200 mx-1"></div>
                  <div className="flex gap-1 px-1 relative">
@@ -1381,7 +1412,7 @@ const QuestionBoard = () => {
         )}
 
         {mode === 'preview' && (
-           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
+           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
               <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1">
                  <TooltipButton icon={Edit3} label="Edit Worksheet" onClick={() => setMode('edit')} />
                  <TooltipButton icon={Share2} label="Share Link" onClick={saveToUrl} />
