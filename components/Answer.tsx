@@ -86,8 +86,6 @@ export const Answer = () => {
      return '';
   }
 
-  let questionCounter = 0;
-
   if (!data) {
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
@@ -148,7 +146,6 @@ export const Answer = () => {
                                 if (b.type === 'text') return <SimpleMarkdown text={b.content} />;
                                 if (b.type === 'embed') return <EmbedRenderer url={b.url} title={b.title} />;
                                 if (b.type === 'question') {
-                                  questionCounter++; 
                                   const q = b as any;
                                   return (
                                       <div className="flex gap-4">

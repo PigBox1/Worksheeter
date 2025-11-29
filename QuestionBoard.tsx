@@ -252,9 +252,9 @@ export const Builder = () => {
      return '';
   }
 
-  let questionCounter = 0;
   let previewQuestionCounter = 0;
-
+  
+  // Publish Actions
   const publishLink = `${window.location.origin}/answer#data=${encodeState(data)}`;
   const handleCopyLink = () => {
       navigator.clipboard.writeText(publishLink);
@@ -383,8 +383,8 @@ export const Builder = () => {
                                 const globalIndex = data.blocks.indexOf(block);
                                 let label;
                                 if (isQuestion || isGroup) {
-                                  questionCounter++;
-                                  label = questionCounter.toString();
+                                  // Note: Editor numbering logic removed to match "Grip" style request, but label calc left for internal logic if needed
+                                  label = (0).toString(); // Placeholder
                                 }
                                 return (
                                   <EditorBlockWrapper 
