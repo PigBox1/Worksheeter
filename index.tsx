@@ -594,19 +594,19 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
             </div>
 
             {/* Hover Menu on the Drag Handle */}
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover/menu:flex gap-1 p-1 bg-slate-800 rounded-lg shadow-xl border border-slate-700 whitespace-nowrap z-[100]">
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover/menu:flex gap-1 p-1 bg-white rounded-lg shadow-xl border border-slate-200 whitespace-nowrap z-[100]">
                 {block.type === 'question' && (
                   <>
-                    <button title="Toggle Image" onClick={() => updateBlock(block.id, parentId, { ...(block as QuestionBlock), image: (block as QuestionBlock).image === undefined ? '' : undefined })} className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 hover:text-white ${(block as QuestionBlock).image !== undefined ? 'text-blue-400' : ''}`}>
+                    <button title="Toggle Image" onClick={() => updateBlock(block.id, parentId, { ...(block as QuestionBlock), image: (block as QuestionBlock).image === undefined ? '' : undefined })} className={`p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 ${(block as QuestionBlock).image !== undefined ? 'text-blue-600 bg-blue-50' : ''}`}>
                       <ImageIcon size={14} />
                     </button>
-                    <button title="Toggle Description" onClick={() => updateBlock(block.id, parentId, { ...(block as QuestionBlock), description: (block as QuestionBlock).description === undefined ? '' : undefined })} className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 hover:text-white ${(block as QuestionBlock).description !== undefined ? 'text-blue-400' : ''}`}>
+                    <button title="Toggle Description" onClick={() => updateBlock(block.id, parentId, { ...(block as QuestionBlock), description: (block as QuestionBlock).description === undefined ? '' : undefined })} className={`p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 ${(block as QuestionBlock).description !== undefined ? 'text-blue-600 bg-blue-50' : ''}`}>
                       <FileText size={14} />
                     </button>
                     
                     {/* Multi-Select Toggle for MC */}
                     {(block as QuestionBlock).qType === 'multiple-choice' && (
-                       <button title="Toggle Multiple Answer" onClick={() => updateBlock(block.id, parentId, { ...(block as QuestionBlock), multiSelect: !(block as QuestionBlock).multiSelect })} className={`p-1.5 rounded hover:bg-slate-700 text-slate-300 hover:text-white ${(block as QuestionBlock).multiSelect ? 'text-blue-400' : ''}`}>
+                       <button title="Toggle Multiple Answer" onClick={() => updateBlock(block.id, parentId, { ...(block as QuestionBlock), multiSelect: !(block as QuestionBlock).multiSelect })} className={`p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 ${(block as QuestionBlock).multiSelect ? 'text-blue-600 bg-blue-50' : ''}`}>
                          <CheckSquare size={14} />
                        </button>
                     )}
@@ -614,9 +614,9 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
                     {/* Syntax Info for Complex */}
                     {showHelper && (
                         <div className="relative group/helper">
-                           <button className="p-1.5 rounded hover:bg-slate-700 text-slate-300 hover:text-white"><HelpCircle size={14} /></button>
-                           <div className="absolute left-full top-0 ml-2 w-64 p-3 bg-slate-800 text-slate-200 text-xs rounded-lg shadow-xl hidden group-hover/helper:block z-[110]">
-                              <p className="font-bold text-white mb-1">Syntax Guide:</p>
+                           <button className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900"><HelpCircle size={14} /></button>
+                           <div className="absolute left-full top-0 ml-2 w-64 p-3 bg-white border border-slate-200 text-slate-600 text-xs rounded-lg shadow-xl hidden group-hover/helper:block z-[110]">
+                              <p className="font-bold text-slate-800 mb-1">Syntax Guide:</p>
                               <ul className="list-disc list-inside space-y-1">
                                  <li>Text gap: <code>[answer]</code></li>
                                  <li>Dropdown: <code>[correct|wrong1]</code></li>
@@ -625,13 +625,13 @@ const EditorBlockWrapper = ({ block, index, parentId, label, updateBlock, remove
                         </div>
                     )}
 
-                    <div className="w-px bg-slate-600 mx-0.5"></div>
+                    <div className="w-px bg-slate-200 mx-0.5"></div>
                   </>
                 )}
-                <button title="Delete" onClick={() => removeBlock(block.id, parentId)} className="p-1.5 rounded hover:bg-red-900/50 text-red-400 hover:text-red-300">
+                <button title="Delete" onClick={() => removeBlock(block.id, parentId)} className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500">
                     <Trash2 size={14} />
                 </button>
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white"></div>
             </div>
          </div>
       </div>
