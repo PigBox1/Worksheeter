@@ -24,7 +24,6 @@ import {
   Eye,
   Edit3,
   Share2,
-  Video,
   GripVertical,
   Pencil,
   HelpCircle,
@@ -229,7 +228,7 @@ const TooltipButton = ({ icon: Icon, label, onClick, className = '', dragPayload
   };
 
   return (
-    <div className="group relative flex items-center justify-center font-sans">
+    <div className="group relative flex items-center justify-center font-sans flex-shrink-0">
       <button 
         onClick={onClick}
         draggable={!!dragPayload}
@@ -1340,30 +1339,30 @@ const QuestionBoard = () => {
         </footer>
 
         {mode === 'edit' && (
-           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
-              <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1 md:gap-2">
-                 <div className="flex gap-1 px-1">
+           <div className="fixed bottom-14 md:bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans w-[95%] md:w-auto max-w-full">
+              <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1 md:gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                 <div className="flex gap-1 px-1 flex-shrink-0">
                     <TooltipButton icon={Type} label="Text" onClick={() => addBlock('text')} dragPayload={{type: 'text'}} onDragEnd={handleDragEnd} />
                     <TooltipButton icon={Heading} label="Group" onClick={() => addBlock('group')} dragPayload={{type: 'group'}} onDragEnd={handleDragEnd} />
                     <TooltipButton icon={LinkIcon} label="Embed" onClick={() => addBlock('embed')} dragPayload={{type: 'embed'}} onDragEnd={handleDragEnd} />
                     <TooltipButton icon={Divide} label="Break" onClick={() => addBlock('divider')} dragPayload={{type: 'divider'}} onDragEnd={handleDragEnd} />
                  </div>
-                 <div className="w-px h-8 bg-slate-200 mx-1"></div>
-                 <div className="flex gap-1 px-1">
+                 <div className="w-px h-8 bg-slate-200 mx-1 flex-shrink-0"></div>
+                 <div className="flex gap-1 px-1 flex-shrink-0">
                     <TooltipButton icon={ImageIcon} label="Multiple Choice" onClick={() => addBlock('question', 'multiple-choice')} dragPayload={{type: 'question', qType: 'multiple-choice'}} onDragEnd={handleDragEnd} />
                     <TooltipButton icon={TextCursorInput} label="Cloze (Text)" onClick={() => addBlock('question', 'cloze-text')} dragPayload={{type: 'question', qType: 'cloze-text'}} onDragEnd={handleDragEnd} />
                     <TooltipButton icon={ListOrdered} label="Cloze (Drop)" onClick={() => addBlock('question', 'cloze-dropdown')} dragPayload={{type: 'question', qType: 'cloze-dropdown'}} onDragEnd={handleDragEnd} />
                     <TooltipButton icon={MousePointerClick} label="Drag & Drop" onClick={() => addBlock('question', 'drag-inline')} dragPayload={{type: 'question', qType: 'drag-inline'}} onDragEnd={handleDragEnd} />
                     <TooltipButton icon={MessageSquare} label="Open Answer" onClick={() => addBlock('question', 'open-answer')} dragPayload={{type: 'question', qType: 'open-answer'}} onDragEnd={handleDragEnd} />
                  </div>
-                 <div className="w-px h-8 bg-slate-200 mx-1"></div>
-                 <div className="flex gap-1 px-1 relative">
+                 <div className="w-px h-8 bg-slate-200 mx-1 flex-shrink-0"></div>
+                 <div className="flex gap-1 px-1 relative flex-shrink-0">
                     <TooltipButton icon={Palette} label="Design" active={showSettings} onClick={() => setShowSettings(!showSettings)} />
                     <TooltipButton icon={Eye} label="Preview" onClick={() => setMode('preview')} />
                     <TooltipButton icon={Trash2} label="Clear All" onClick={() => setShowClearConfirm(true)} />
                     {/* Settings Popover */}
                     {showSettings && (
-                       <div className="absolute bottom-full right-0 mb-4 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-5 animate-in fade-in zoom-in-95 origin-bottom-right">
+                       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:absolute md:bottom-full md:left-auto md:right-0 md:translate-x-0 mb-4 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-5 animate-in fade-in zoom-in-95 origin-bottom-right z-[60]">
                           <div className="flex justify-between items-center mb-4">
                              <h3 className="font-bold text-slate-800">Design</h3>
                              <button onClick={() => setShowSettings(false)}><X size={16} className="text-slate-400 hover:text-slate-600"/></button>
@@ -1412,8 +1411,8 @@ const QuestionBoard = () => {
         )}
 
         {mode === 'preview' && (
-           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans">
-              <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1">
+           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 font-sans w-[95%] md:w-auto max-w-full">
+              <div className="bg-white/90 backdrop-blur-md shadow-2xl border border-slate-200/50 p-2 rounded-2xl flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                  <TooltipButton icon={Edit3} label="Edit Worksheet" onClick={() => setMode('edit')} />
                  <TooltipButton icon={Share2} label="Share Link" onClick={saveToUrl} />
                  <TooltipButton icon={Download} label="Download PDF" onClick={handleDownloadPDF} />
